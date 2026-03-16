@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MESH — Real-Time Trust Engine</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    line-height: 1.7;
+    font-size: 16px;
+  }
+
+  /* ── COVER ── */
+  .cover {
+    background: #0a0a09;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 10%;
+  }
+  .cover-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5dcaa5;
+    margin-bottom: 28px;
+  }
+  .cover-name {
+    font-size: 108px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+    color: #fff;
+    margin-bottom: 20px;
+  }
+  .cover-sub {
+    font-size: 28px;
+    font-weight: 300;
+    color: #9fe1cb;
+    letter-spacing: -0.01em;
+    margin-bottom: 36px;
+  }
+  .cover-tagline {
+    font-size: 18px;
+    font-weight: 400;
+    color: #888780;
+    max-width: 520px;
+    line-height: 1.6;
+    margin-bottom: 56px;
+  }
+  .cover-meta {
+    font-size: 12px;
+    color: #444441;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── PAGE ── */
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 72px 40px;
+  }
+
+  /* ── SECTION LABELS ── */
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #1d9e75;
+    margin-bottom: 14px;
+  }
+
+  /* ── HEADINGS ── */
+  h2 {
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    color: #0a0a09;
+    margin-bottom: 22px;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    color: #0a0a09;
+    margin-bottom: 8px;
+    margin-top: 36px;
+  }
+  p {
+    color: #3d3d3a;
+    margin-bottom: 16px;
+    line-height: 1.75;
+  }
+  strong { color: #0a0a09; font-weight: 600; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    border: none;
+    border-top: 1px solid #d3d1c7;
+    margin: 64px 0;
+  }
+
+  /* ── PULL QUOTE ── */
+  .pull-quote {
+    border-left: 3px solid #1d9e75;
+    padding: 20px 32px;
+    background: #e1f5ee;
+    border-radius: 0 10px 10px 0;
+    font-size: 19px;
+    font-style: italic;
+    color: #085041;
+    margin: 32px 0;
+    line-height: 1.6;
+  }
+
+  /* ── PILLAR CARDS ── */
+  .pillar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 32px 0;
+  }
+  .pillar-card {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    padding: 24px 20px;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
+  .pill-purple { background: #eeedfe; color: #3c3489; }
+  .pill-teal   { background: #e1f5ee; color: #085041; }
+  .pill-amber  { background: #faeeda; color: #633806; }
+  .pillar-card h4 { font-size: 14px; font-weight: 600; color: #0a0a09; margin-bottom: 8px; }
+  .pillar-card p  { font-size: 13px; color: #5f5e5a; margin: 0; line-height: 1.6; }
+
+  /* ── STACK ── */
+  .stack {
+    margin: 32px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #d3d1c7;
+  }
+  .stack-row {
+    display: flex;
+    align-items: center;
+    padding: 18px 24px;
+    gap: 20px;
+    border-bottom: 1px solid #d3d1c7;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .stack-row.s-agent    { background: #eeedfe; }
+  .stack-row.s-mesh     { background: #0f6e56; }
+  .stack-row.s-merchant { background: #faece7; }
+  .stack-row.s-auth     { background: #faeeda; }
+  .stack-row.s-settle   { background: #f1efe8; }
+  .stack-label {
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 170px;
+    flex-shrink: 0;
+  }
+  .s-agent    .stack-label { color: #3c3489; }
+  .s-mesh     .stack-label { color: #fff; }
+  .s-merchant .stack-label { color: #712b13; }
+  .s-auth     .stack-label { color: #633806; }
+  .s-settle   .stack-label { color: #444441; }
+  .stack-desc {
+    font-size: 13px;
+    flex: 1;
+    line-height: 1.5;
+  }
+  .s-agent    .stack-desc { color: #534ab7; }
+  .s-mesh     .stack-desc { color: #9fe1cb; }
+  .s-merchant .stack-desc { color: #993c1d; }
+  .s-auth     .stack-desc { color: #854f0b; }
+  .s-settle   .stack-desc { color: #5f5e5a; }
+  .stack-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .s-agent    .stack-badge { background: #afa9ec; color: #26215c; }
+  .s-mesh     .stack-badge { background: #085041; color: #9fe1cb; }
+  .s-merchant .stack-badge { background: #f5c4b3; color: #4a1b0c; }
+  .s-auth     .stack-badge { background: #fac775; color: #412402; }
+  .s-settle   .stack-badge { background: #d3d1c7; color: #2c2c2a; }
+
+  /* ── TOPOLOGY CARDS ── */
+  .topology-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 28px 0;
+  }
+  .topology-card {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    padding: 24px 22px;
+  }
+  .topology-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+  }
+  .badge-open   { background: #e1f5ee; color: #085041; }
+  .badge-closed { background: #faeeda; color: #633806; }
+  .topology-card h4 { font-size: 14px; font-weight: 600; color: #0a0a09; margin-bottom: 8px; }
+  .topology-card p  { font-size: 13px; color: #5f5e5a; margin: 0 0 12px; line-height: 1.6; }
+  .topology-guarantee {
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f6e56;
+    background: #e1f5ee;
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+
+  /* ── TWO MOMENTS ── */
+  .two-moments {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 28px 0;
+  }
+  .moment-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid #f1efe8;
+  }
+  .moment-row:last-child { border-bottom: none; }
+  .moment-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #0f6e56;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .moment-body { flex: 1; }
+  .moment-body h5 { font-size: 14px; font-weight: 600; color: #0a0a09; margin-bottom: 6px; }
+  .moment-body p  { font-size: 13px; color: #5f5e5a; margin: 0; line-height: 1.55; }
+  .moment-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #e1f5ee;
+    color: #085041;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  /* ── ENGINE BLOCK ── */
+  .engine-outer {
+    background: #0a0a09;
+    border-radius: 14px;
+    padding: 32px;
+    margin: 32px 0;
+  }
+  .engine-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5dcaa5;
+    margin-bottom: 20px;
+  }
+  .engine-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .engine-card {
+    background: #1a1a18;
+    border-radius: 10px;
+    padding: 18px 20px;
+    border: 1px solid #2c2c2a;
+  }
+  .engine-card h5 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #9fe1cb;
+    margin-bottom: 6px;
+  }
+  .engine-card p {
+    font-size: 12px;
+    color: #888780;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ── TOKEN ANATOMY ── */
+  .token-block {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 32px 0;
+  }
+  .token-header {
+    background: #0a0a09;
+    color: #5dcaa5;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    padding: 12px 22px;
+    letter-spacing: 0.05em;
+  }
+  .token-layer {
+    border-bottom: 1px solid #f1efe8;
+    padding: 16px 22px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .token-layer:last-child { border-bottom: none; }
+  .token-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    min-width: 58px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .b-gray   { background: #f1efe8; color: #444441; }
+  .b-purple { background: #eeedfe; color: #3c3489; }
+  .b-teal   { background: #e1f5ee; color: #085041; }
+  .b-amber  { background: #faeeda; color: #633806; }
+  .b-blue   { background: #e6f1fb; color: #0c447c; }
+  .b-dark   { background: #2c2c2a; color: #d3d1c7; }
+  .token-body h5 { font-size: 13px; font-weight: 600; color: #0a0a09; margin-bottom: 5px; }
+  .token-body p  { font-size: 12px; color: #5f5e5a; margin: 0; line-height: 1.55; font-family: "SF Mono", "Fira Code", monospace; }
+
+  /* ── 2x2 QUAD ── */
+  .quad-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 32px 0;
+  }
+  .quad-card {
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid transparent;
+  }
+  .quad-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .quad-card p  { font-size: 13px; margin: 0; line-height: 1.6; }
+  .q-green  { background: #eaf3de; border-color: #97c459; }
+  .q-green h4 { color: #27500a; } .q-green p { color: #3b6d11; }
+  .q-amber  { background: #faeeda; border-color: #ef9f27; }
+  .q-amber h4 { color: #633806; } .q-amber p { color: #854f0b; }
+  .q-red    { background: #fcebeb; border-color: #f09595; }
+  .q-red h4 { color: #791f1f; }   .q-red p  { color: #a32d2d; }
+
+  /* ── MERCHANT DETAIL ── */
+  .merchant-steps {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 32px 0;
+  }
+  .merchant-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 24px;
+    border-bottom: 1px solid #f1efe8;
+  }
+  .merchant-step:last-child { border-bottom: none; }
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #faece7;
+    color: #712b13;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-body h5 { font-size: 13px; font-weight: 600; color: #0a0a09; margin-bottom: 4px; }
+  .step-body p  { font-size: 13px; color: #5f5e5a; margin: 0; line-height: 1.5; }
+  .step-gain {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f6e56;
+    background: #e1f5ee;
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  /* ── PROTOCOL COMPAT ── */
+  .compat-list { margin: 24px 0; }
+  .compat-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid #f1efe8;
+  }
+  .compat-row:last-child { border-bottom: none; }
+  .compat-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .dot-teal  { background: #1d9e75; }
+  .dot-green { background: #639922; }
+  .dot-amber { background: #ba7517; }
+  .compat-name { font-size: 14px; font-weight: 600; color: #0a0a09; min-width: 170px; }
+  .compat-desc { font-size: 13px; color: #5f5e5a; flex: 1; line-height: 1.55; }
+  .compat-rel  { font-size: 11px; font-weight: 600; color: #0f6e56; background: #e1f5ee; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+
+  /* ── BUYER TABLE ── */
+  .buyer-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 32px 0;
+    font-size: 13px;
+  }
+  .buyer-table th {
+    text-align: left;
+    padding: 10px 16px;
+    background: #f1efe8;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #444441;
+    border-bottom: 1px solid #d3d1c7;
+  }
+  .buyer-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1efe8;
+    vertical-align: top;
+    color: #3d3d3a;
+    line-height: 1.55;
+  }
+  .buyer-table tr:last-child td { border-bottom: none; }
+  .buyer-table td:first-child { font-weight: 600; color: #0a0a09; }
+
+  /* ── MOAT ── */
+  .moat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 32px 0;
+  }
+  .moat-card {
+    background: #fff;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .moat-num { font-size: 36px; font-weight: 700; color: #1d9e75; margin-bottom: 10px; line-height: 1; }
+  .moat-card h4 { font-size: 15px; font-weight: 600; color: #0a0a09; margin-bottom: 8px; }
+  .moat-card p  { font-size: 13px; color: #5f5e5a; margin: 0; line-height: 1.6; }
+
+  /* ── BUILD SEQUENCE ── */
+  .build-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin: 32px 0;
+    border: 1px solid #d3d1c7;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .build-phase {
+    padding: 24px 22px;
+    background: #fff;
+    border-right: 1px solid #d3d1c7;
+  }
+  .build-phase:last-child { border-right: none; }
+  .build-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #1d9e75;
+    margin-bottom: 16px;
+  }
+  .build-item {
+    font-size: 13px;
+    color: #3d3d3a;
+    padding: 7px 0;
+    border-bottom: 1px solid #f1efe8;
+    line-height: 1.4;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .build-item:last-child { border-bottom: none; }
+  .build-item::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #d3d1c7;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+
+  /* ── CLOSING PITCH ── */
+  .pitch-block {
+    background: #0a0a09;
+    color: #f1efe8;
+    border-radius: 16px;
+    padding: 52px 56px;
+    margin: 48px 0 0;
+  }
+  .pitch-block .pitch-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5dcaa5;
+    margin-bottom: 24px;
+  }
+  .pitch-block p {
+    font-size: 19px;
+    line-height: 1.85;
+    color: #b4b2a9;
+    margin: 0;
+  }
+  .pitch-block strong { color: #9fe1cb; font-weight: 600; }
+
+  /* ── FOOTER ── */
+  .doc-footer {
+    text-align: center;
+    padding: 40px;
+    font-size: 12px;
+    color: #888780;
+    border-top: 1px solid #d3d1c7;
+    letter-spacing: 0.04em;
+  }
+
+  @media (max-width: 640px) {
+    .pillar-grid, .quad-grid, .moat-grid, .build-grid, .engine-grid, .topology-grid { grid-template-columns: 1fr; }
+    .build-phase { border-right: none; border-bottom: 1px solid #d3d1c7; }
+    .cover-name { font-size: 72px; }
+    .cover-sub { font-size: 22px; }
+    .page { padding: 48px 20px; }
+    .pitch-block { padding: 36px 28px; }
+    .pitch-block p { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-eyebrow">Product concept · March 2026</div>
+  <div class="cover-name">MESH</div>
+  <div class="cover-sub">Real-Time Trust Engine</div>
+  <div class="cover-tagline">A behavioral trust runtime that sits above payment rails and commerce protocols — verifying that AI agents do exactly what humans authorized, on every action, in real time.</div>
+  <div class="cover-meta">Draft v1.0 &nbsp;·&nbsp; Confidential</div>
+</div>
+
+<!-- SECTION 1: THE PROBLEM -->
+<div class="page">
+  <div class="section-label">The problem</div>
+  <h2>Agents are transacting autonomously. Nobody can prove they did what they were told.</h2>
+
+  <p>The agentic commerce ecosystem is being built right now. AI agents are booking travel, purchasing software, managing procurement, and executing multi-step financial workflows — without a human present at each step. The infrastructure catching up around them answers two questions well:</p>
+
+  <p><strong>Can this agent pay?</strong> — Visa TAP, Mastercard Agent Pay, and the Verifiable Intent open spec handle payment credential binding and delegation chains.</p>
+
+  <p><strong>What is the agent buying and how?</strong> — OpenAI ACP and Google UCP handle structured commerce sessions, cart checkout, and merchant integration.</p>
+
+  <p>But nobody answers the third question — the one that makes everything else unsafe:</p>
+
+  <div class="pull-quote">
+    "Is this agent actually doing what the human authorized — and can anyone prove it, cryptographically, at this moment?"
+  </div>
+
+  <p>When an agent's instructions are corrupted by a malicious webpage, when its task interpretation drifts across twenty reasoning steps, when a sub-agent is spawned with modified scope — every existing trust check passes. The credential looks valid. The payment authorises. The harm happens.</p>
+
+  <p>This is the gap MESH fills — not by competing with existing protocols, but by adding the one layer none of them provide: a live behavioral runtime with an intent verification engine.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 2: WHAT MESH IS -->
+  <div class="section-label">The product</div>
+  <h2>A runtime that guards agent behavior. An engine that verifies intent.</h2>
+
+  <p>MESH has two inseparable components. The <strong>runtime</strong> issues and carries a signed artifact — the Agent Trust Token — through every hop of an agent's execution. The <strong>engine</strong> evaluates every proposed action against the original human intent before it executes. Together they answer two distinct questions simultaneously:</p>
+
+  <div class="pillar-grid">
+    <div class="pillar-card">
+      <div class="pill pill-purple">Trust</div>
+      <h4>Verifiable chain of authority</h4>
+      <p>Who, through a cryptographically signed delegation graph, authorized this agent to act — and is that authority still valid right now?</p>
+    </div>
+    <div class="pillar-card">
+      <div class="pill pill-teal">Intent</div>
+      <h4>Verifiable statement of purpose</h4>
+      <p>What exactly was this agent told to do — and has its behavior stayed consistent with those original instructions since they were signed?</p>
+    </div>
+    <div class="pillar-card">
+      <div class="pill pill-amber">Engine</div>
+      <h4>Live behavioral evaluation</h4>
+      <p>A semantic drift score and injection flag computed before every action. The only layer in the ecosystem that monitors agent behavior in real time, not just at credential issuance.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- SECTION 3: STACK WITH MERCHANT -->
+  <div class="section-label">The commerce stack</div>
+  <h2>Five layers. Four questions. Each answered by a different party.</h2>
+
+  <div class="stack">
+    <div class="stack-row s-agent">
+      <div class="stack-label">Agent surface</div>
+      <div class="stack-desc">ChatGPT Operator · Gemini AI Mode · LangChain · CrewAI · AutoGen · custom runtimes</div>
+      <div class="stack-badge">ACP · UCP · MCP</div>
+    </div>
+    <div class="stack-row s-mesh">
+      <div class="stack-label">MESH engine</div>
+      <div class="stack-desc">ATT issued by human before agent starts · engine runs at agent output boundary · verify API called by merchant · audit log</div>
+      <div class="stack-badge">wraps agent output</div>
+    </div>
+    <div class="stack-row s-merchant">
+      <div class="stack-label">Merchant acceptance</div>
+      <div class="stack-desc">ACP checkout API · UCP commerce session · order confirmation · MESH verify before accepting · inventory hold · payment trigger</div>
+      <div class="stack-badge">commerce layer</div>
+    </div>
+    <div class="stack-row s-auth">
+      <div class="stack-label">Payment authorisation</div>
+      <div class="stack-desc">Visa TAP · Mastercard Agent Pay · Verifiable Intent spec · issuer approval · ATT ref embedded in payment request</div>
+      <div class="stack-badge">credential layer</div>
+    </div>
+    <div class="stack-row s-settle">
+      <div class="stack-label">Settlement rails</div>
+      <div class="stack-desc">Card networks · ACH · USDC · RTP · any future rail. MESH never touches this layer directly.</div>
+      <div class="stack-badge">money moves</div>
+    </div>
+  </div>
+
+  <p>Each layer answers exactly one question. The agent answers <em>what task am I executing</em>. MESH answers <em>is this agent doing what the human authorized</em>. The merchant answers <em>do I accept this order</em>. Payment authorisation answers <em>is the credential valid</em>. Settlement answers <em>can the money move</em>. MESH does not sit above or below the agent in a simple vertical hierarchy — its position relative to the agent depends on the agent type. That is explained in the next section.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 3b: HOW MESH RELATES TO THE AGENT -->
+  <div class="section-label">How MESH relates to the agent</div>
+  <h2>The ATT is always created by the human. The engine always runs at the agent's output boundary.</h2>
+
+  <p>There is one rule that holds without exception across every agent type: <strong>the agent never creates the ATT</strong>. The human defines the task and scope. MESH issues and signs the ATT before the agent starts. The agent receives the already-sealed token and carries it. An agent that self-issues its own trust token would defeat the entire purpose — it would be a contractor writing their own reference letter.</p>
+
+  <p>Where MESH physically sits depends on whether the agent runtime is open or closed.</p>
+
+  <p>MESH integrates with two parties: the <strong>deployer</strong> who builds or configures the agent, and the <strong>merchant</strong> who accepts the transaction. OpenAI, Google, and every other LLM runtime sit between those two surfaces as interchangeable infrastructure. MESH does not need them to call its API, adopt its spec, or know it exists.</p>
+
+  <div class="topology-grid">
+    <div class="topology-card">
+      <div class="topology-badge badge-open">Integration surface 1 — deployer</div>
+      <h4>The enterprise or SaaS builder who configures the agent</h4>
+      <p>The deployer controls the agent's tool definitions, system prompt, and SDK dependencies — regardless of which LLM powers it. They integrate MESH at build time because their compliance or legal team requires an audit trail, or because "MESH-verified" closes enterprise deals their competitors cannot. The underlying LLM runtime is irrelevant to this integration.</p>
+      <div class="topology-guarantee">Full SDK for custom agents · ATT + scope config for API-based agents</div>
+    </div>
+    <div class="topology-card">
+      <div class="topology-badge badge-closed">Integration surface 2 — merchant</div>
+      <h4>Any merchant accepting agent-initiated transactions</h4>
+      <p>The merchant calls <code>POST /v1/verify</code> before confirming any order. They do not care which LLM runtime the agent used — ChatGPT, Gemini, LangChain, or anything else. They care whether the ATT is valid and the action is in scope. This is the universal backstop that works across all agent types and all deployment topologies.</p>
+      <div class="topology-guarantee">Single endpoint · works for all agent types · chargeback defense document</div>
+    </div>
+  </div>
+
+  <p>The engine runs at two independent moments. <strong>Moment 1</strong> is at the agent's output boundary — inside the SDK for custom agents, or enforced by the deployer's tool configuration for API-based agents. <strong>Moment 2</strong> is at the merchant boundary — an independent verify call that works identically regardless of which runtime or deployment model was used.</p>
+
+  <div class="two-moments">
+    <div class="moment-row">
+      <div class="moment-num">1</div>
+      <div class="moment-body">
+        <h5>Pre-execution gate — agent output boundary</h5>
+        <p>For custom agents: runs inside the MESH SDK as middleware between every LLM decision and every tool call. For API-based agents (Assistants API, Vertex AI): enforced at the application layer by the deployer who configures tool definitions and system prompts. Checks: ATT validity · delegation chain · intent scope · prompt hash · drift score · injection scan.</p>
+      </div>
+      <div class="moment-tag">deployer side</div>
+    </div>
+    <div class="moment-row">
+      <div class="moment-num">2</div>
+      <div class="moment-body">
+        <h5>Merchant verify — independent universal backstop</h5>
+        <p>Runs when the merchant calls <code>POST /v1/verify</code> before confirming any order. Completely independent of which LLM runtime, deployment model, or agent framework was used. If no ATT is present, the merchant's own policy determines whether to accept, require approval, or reject. Works the same whether the agent was built on OpenAI, Google, Anthropic, or anything else.</p>
+      </div>
+      <div class="moment-tag">merchant side</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- SECTION 4: MERCHANT LAYER -->
+  <div class="section-label">The merchant layer</div>
+  <h2>The merchant is not a pass-through. It is MESH's most important verification point.</h2>
+
+  <p>Every agent action that reaches a merchant triggers a five-step sequence. MESH's verify API is called at step two — before the merchant confirms anything. This sequencing is what creates chargeback defense, fraud signal improvement, and liability clarity for the merchant.</p>
+
+  <div class="merchant-steps">
+    <div class="merchant-step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h5>Receive ACP or UCP checkout session</h5>
+        <p>Structured cart contents arrive from the agent — line items, quantities, prices, merchant identifier.</p>
+      </div>
+    </div>
+    <div class="merchant-step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h5>Call MESH POST /v1/verify</h5>
+        <p>Trust chain checked. Intent envelope evaluated. Drift score and injection flags returned. Six checks in under 100ms.</p>
+      </div>
+      <div class="step-gain">MESH verify</div>
+    </div>
+    <div class="merchant-step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h5>Validate purchase against ATT behavioral scope</h5>
+        <p>Is the amount within the signed limit? Is the merchant category in the allowed list? Is this a single-use or recurring scope?</p>
+      </div>
+      <div class="step-gain">scope match</div>
+    </div>
+    <div class="merchant-step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h5>Confirm order and hold inventory</h5>
+        <p>Structured confirmation returned to the agent. Order is now cryptographically linked to the original human intent via the ATT.</p>
+      </div>
+      <div class="step-gain">audit anchor</div>
+    </div>
+    <div class="merchant-step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h5>Trigger payment authorisation with ATT reference</h5>
+        <p>Payment request carries the ATT identifier — creating an unbroken chain from human instruction to payment credential to settlement record.</p>
+      </div>
+      <div class="step-gain">dispute proof</div>
+    </div>
+  </div>
+
+  <p>When a dispute arrives, the merchant produces the signed intent envelope, the delegation chain, and the verification timestamp. That is a complete, tamper-evident dispute package. No existing protocol provides this for agent-initiated transactions.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 5: THE ENGINE -->
+  <div class="section-label">The engine</div>
+  <h2>What makes MESH a runtime with an engine — not just another credential format.</h2>
+
+  <p>Every existing protocol in this space is a static credential: a signed artifact that proves authorization was granted at a point in time. MESH extends the Verifiable Intent SD-JWT format with two capabilities VI explicitly deferred — live runtime state and behavioral evaluation. These two capabilities are the engine.</p>
+
+  <div class="engine-outer">
+    <div class="engine-title">MESH — what runs before every action</div>
+    <div class="engine-grid">
+      <div class="engine-card">
+        <h5>Prompt hash verification</h5>
+        <p>SHA-256 of the agent's original instruction context, signed at task creation. Any modification to the agent's instructions after the ATT is issued — through prompt injection, context manipulation, or tool response tampering — produces a hash divergence. Detected before the action executes.</p>
+      </div>
+      <div class="engine-card">
+        <h5>Semantic drift scoring</h5>
+        <p>A lightweight LLM classifier compares every proposed action against the natural language task statement in the signed intent envelope. Returns a drift score between 0 and 1. Actions semantically inconsistent with the original task are flagged even if they technically fall within the structured scope limits.</p>
+      </div>
+      <div class="engine-card">
+        <h5>Prompt injection detection</h5>
+        <p>Tool responses, webpage content, and API returns are scanned for adversarial instruction patterns before they enter the agent's context. Detected injection attempts are logged as permanent flags on the ATT — visible to merchants, processors, and auditors even if the action was ultimately blocked.</p>
+      </div>
+      <div class="engine-card">
+        <h5>Runtime state tracking</h5>
+        <p>Live counters for actions taken, budget consumed, and verification count are maintained per ATT. Merchants and processors receive current state with every verify response — not just a point-in-time credential. Velocity anomalies (high action count, unusual spend rate) trigger automatic flags.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The engine is the reason MESH cannot be replicated by writing a spec. It accumulates behavioral data across every ATT issued and every verification run — building a proprietary understanding of what normal agentic task execution looks like versus compromised, drifted, or injected execution. That dataset is the compound moat.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 6: TOKEN ANATOMY -->
+  <div class="section-label">The token</div>
+  <h2>The Agent Trust Token — six layers in a single signed artifact.</h2>
+
+  <p>The ATT is a ~3KB SD-JWT that travels as an HTTP header alongside every ACP or UCP session. It is self-contained — a merchant can verify it without calling MESH in the happy path. Six layers, two signatures, selective disclosure so each party sees only what it needs.</p>
+
+  <div class="token-block">
+    <div class="token-header">Agent Trust Token (ATT) &nbsp;·&nbsp; SD-JWT &nbsp;·&nbsp; EdDSA &nbsp;·&nbsp; selective disclosure &nbsp;·&nbsp; ~3KB on the wire</div>
+    <div class="token-layer">
+      <div class="token-badge b-gray">Header</div>
+      <div class="token-body">
+        <h5>JOSE header</h5>
+        <p>alg: EdDSA &nbsp;·&nbsp; typ: ATT+SD-JWT &nbsp;·&nbsp; kid: key_id &nbsp;·&nbsp; ver: 1.0</p>
+      </div>
+    </div>
+    <div class="token-layer">
+      <div class="token-badge b-purple">Trust</div>
+      <div class="token-body">
+        <h5>Delegation chain block</h5>
+        <p>att_id &nbsp;·&nbsp; principal (KYB-verified org) &nbsp;·&nbsp; agent_identity (keypair + framework) &nbsp;·&nbsp; delegation_chain[ ] — each hop signed, scope narrows &nbsp;·&nbsp; revocation_id</p>
+      </div>
+    </div>
+    <div class="token-layer">
+      <div class="token-badge b-teal">Intent</div>
+      <div class="token-body">
+        <h5>Intent envelope block</h5>
+        <p>task_id &nbsp;·&nbsp; ~task_description (selectively disclosed — hash only to merchants) &nbsp;·&nbsp; task_hash &nbsp;·&nbsp; behavioral_scope { allowed_actions, categories, max_value, blocked_categories, geographies } &nbsp;·&nbsp; prompt_hash (sha256 of original instruction context) &nbsp;·&nbsp; constraints { requires_approval_above, no_recurring_without_approval }</p>
+      </div>
+    </div>
+    <div class="token-layer">
+      <div class="token-badge b-amber">Engine</div>
+      <div class="token-body">
+        <h5>Runtime state block — live, updated per verification</h5>
+        <p>state (active / suspended / awaiting_approval / revoked) &nbsp;·&nbsp; actions_taken &nbsp;·&nbsp; budget_consumed &nbsp;·&nbsp; drift_score (0–1) &nbsp;·&nbsp; injection_flags[ ] &nbsp;·&nbsp; last_verified_at &nbsp;·&nbsp; verification_count</p>
+      </div>
+    </div>
+    <div class="token-layer">
+      <div class="token-badge b-blue">Refs</div>
+      <div class="token-body">
+        <h5>Protocol references block — interoperability anchors</h5>
+        <p>acp_session_id &nbsp;·&nbsp; ucp_session_id &nbsp;·&nbsp; tap_token_ref &nbsp;·&nbsp; payment_instrument_id &nbsp;·&nbsp; checkout_hash (links to merchant-signed cart)</p>
+      </div>
+    </div>
+    <div class="token-layer">
+      <div class="token-badge b-dark">Sig</div>
+      <div class="token-body">
+        <h5>Dual signature block</h5>
+        <p>issuer_sig — MESH platform, signs all layers &nbsp;·&nbsp; principal_sig — enterprise private key, signs intent + delegation (MESH cannot issue unilaterally) &nbsp;·&nbsp; selective_disclosures[ ] — disclosure keys per field per role</p>
+      </div>
+    </div>
+  </div>
+
+  <p>Three things are deliberately absent from the token: the raw prompt text (only its hash), the agent's internal reasoning (only its actions), and payment card numbers (only a reference pointer). The ATT is a trust document, not a payment credential.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 7: THE 2x2 -->
+  <div class="section-label">Why both dimensions are required</div>
+  <h2>The four states of an agent. The amber quadrant is the gap nobody else fills.</h2>
+
+  <div class="quad-grid">
+    <div class="quad-card q-green">
+      <h4>Trusted + verified intent</h4>
+      <p>Agent is authorized AND behaving consistently with its original instructions. All six MESH checks pass. <strong>APPROVE.</strong></p>
+    </div>
+    <div class="quad-card q-red">
+      <h4>Untrusted + any intent</h4>
+      <p>No valid delegation chain. Spoofed or rogue agent. Every existing protocol catches this. <strong>BLOCK.</strong></p>
+    </div>
+    <div class="quad-card q-amber">
+      <h4>Trusted + unverified intent</h4>
+      <p>Legitimate agent that has drifted or been prompt-injected mid-task. Passes every existing trust check. Only MESH catches this. <strong>FLAG.</strong> This quadrant is MESH's unique reason to exist.</p>
+    </div>
+    <div class="quad-card q-red">
+      <h4>Untrusted + unverified intent</h4>
+      <p>Unknown actor, unknown task. No authorization chain, no intent context. <strong>BLOCK.</strong></p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- SECTION 8: PROTOCOL POSITIONING -->
+  <div class="section-label">Protocol positioning</div>
+  <h2>MESH is additive to every existing protocol. Not a replacement for any of them.</h2>
+
+  <p>The credential format layer is commoditizing. Verifiable Intent is Apache 2.0. Visa, Mastercard, Google, and OpenAI are all publishing specs. MESH implements the VI SD-JWT credential format and extends it with the runtime state block and engine — the two capabilities VI explicitly deferred to future companion documents.</p>
+
+  <div class="compat-list">
+    <div class="compat-row">
+      <div class="compat-dot dot-teal"></div>
+      <div class="compat-name">Verifiable Intent (VI)</div>
+      <div class="compat-desc">MESH implements VI's layered SD-JWT credential format. The engine's runtime state block and drift detection are the VI companion extensions that the spec deferred. MESH is what VI needs to be safe for fully autonomous, long-running agents.</div>
+      <div class="compat-rel">builds on</div>
+    </div>
+    <div class="compat-row">
+      <div class="compat-dot dot-green"></div>
+      <div class="compat-name">OpenAI ACP</div>
+      <div class="compat-desc">ACP handles the commerce session — what the agent buys through ChatGPT or Operator. The ATT travels alongside the ACP session as an HTTP header. Merchants call MESH verify before confirming the ACP checkout.</div>
+      <div class="compat-rel">complementary</div>
+    </div>
+    <div class="compat-row">
+      <div class="compat-dot dot-green"></div>
+      <div class="compat-name">Google UCP</div>
+      <div class="compat-desc">UCP handles Gemini commerce sessions. ATT registered as an OAuth scope extension. MESH tools exposed as MCP-compliant endpoints in the Gemini tool registry — exactly the model Google designed UCP to support.</div>
+      <div class="compat-rel">complementary</div>
+    </div>
+    <div class="compat-row">
+      <div class="compat-dot dot-amber"></div>
+      <div class="compat-name">Visa TAP</div>
+      <div class="compat-desc">TAP validates payment credential binding. The ATT references the TAP token via tap_token_ref — creating a cryptographic link between the behavioral trust record and the payment credential. Enables full dispute resolution across both layers.</div>
+      <div class="compat-rel">links to</div>
+    </div>
+    <div class="compat-row">
+      <div class="compat-dot dot-amber"></div>
+      <div class="compat-name">Mastercard Agent Pay</div>
+      <div class="compat-desc">Same model as Visa TAP. MESH operates at the behavioral layer above card network authorization. Rail-agnostic by design — identical behavior over USDC, ACH, or any non-card rail.</div>
+      <div class="compat-rel">rail-agnostic</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- SECTION 9: INTEGRATION -->
+  <div class="section-label">Integration model</div>
+  <h2>Two surfaces. Deployer and merchant. LLM runtimes are infrastructure below both.</h2>
+
+  <p>OpenAI has ACP. Google has UCP. Both are open specs that handle commerce sessions well. Neither needs to call MESH and neither will — they are LLM infrastructure, not integration targets. MESH integrates with the parties on either side of the LLM: the deployer who builds the agent-powered product, and the merchant who accepts the transaction. The LLM runtime is interchangeable.</p>
+
+  <h3>Deployer surface — enterprises and SaaS builders</h3>
+  <p>The deployer is anyone who builds or configures an agent-powered product using an LLM API. An enterprise IT team building an internal procurement bot on the Assistants API. A startup building an AI travel product on Gemini. A developer building a custom AutoGen workflow. In all three cases the deployer controls the agent configuration entirely — which tools it can call, what system prompt it receives, which SDK it runs. They integrate MESH at this layer, not at the LLM layer.</p>
+  <p>For <strong>custom agents</strong> (LangChain, AutoGen, bespoke code), the MESH SDK is imported as a dependency. The human calls <code>att = mesh.create(task, scope)</code> at task creation. The SDK registers as middleware. Every tool call is intercepted by the engine before executing. Full prompt visibility, strongest guarantee.</p>
+  <p>For <strong>API-based agents</strong> (Assistants API, Vertex AI, any managed agent service), the deployer configures the agent with the MESH SDK at the application layer they own — injecting the ATT into the system context and pointing tool definitions at MESH-wrapped endpoints they control. The LLM itself is unaware of MESH. The deployer is in full control.</p>
+  <p>The deployer integrates MESH because their compliance team requires auditability, their legal team requires liability documentation, or because "MESH-verified" is the answer to the CFO's "how do I trust this AI" objection in enterprise sales. The LLM runtime is irrelevant to this decision.</p>
+
+  <h3>Merchant surface — the universal backstop</h3>
+  <p>Every merchant accepting agent-initiated transactions calls <code>POST /v1/verify</code> before confirming any order. One endpoint. One integration. Works identically for every agent runtime, every deployment model, every LLM provider. The merchant receives a verdict — approved, blocked, or flagged — in under 100ms.</p>
+  <p>The merchant does not need to know or care whether the agent used OpenAI, Google, or a custom framework. They care about three things: is the ATT valid, is this action within the signed scope, and does the behavioral state show any drift or injection flags. MESH answers all three from a single call.</p>
+  <p>This is also where merchant adoption creates platform pull. When enough high-risk merchants require an ATT as a condition of accepting agent transactions, that requirement flows back to whoever deployed the agent — enterprises and SaaS builders — creating demand for MESH integration without any direct engagement with OpenAI or Google.</p>
+
+  <hr class="divider">
+
+  <!-- SECTION 10: BUYERS -->
+  <div class="section-label">Who buys MESH</div>
+  <h2>Four buyers. Three different pain points. One product.</h2>
+
+  <table class="buyer-table">
+    <thead>
+      <tr>
+        <th>Buyer</th>
+        <th>Who precisely</th>
+        <th>Why they buy MESH</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>SaaS builders</td>
+        <td>AI procurement tools, travel automation, expense management startups — companies building products on GPT or Gemini and selling them to businesses</td>
+        <td>MESH converts the CFO's "how do I trust this AI" sales objection into a competitive differentiator. Builders who integrate MESH close enterprise deals that unverified competitors cannot. It is a sales accelerant, not just a security feature.</td>
+      </tr>
+      <tr>
+        <td>Enterprises</td>
+        <td>IT and compliance teams at mid-market and large companies deploying internal AI agents for procurement, finance operations, or vendor management</td>
+        <td>Compliance and legal teams require a signed, auditable chain of accountability for every autonomous financial action. No existing tool provides it. MESH is the audit infrastructure that makes autonomous AI financially goverable.</td>
+      </tr>
+      <tr>
+        <td>High-risk merchants</td>
+        <td>B2B SaaS vendors, online travel agencies, cloud and API providers — any category with high chargeback exposure or non-refundable inventory</td>
+        <td>A valid ATT is a chargeback defense document. Existing fraud models are trained on human behavioral patterns and degrade in accuracy as agent volume grows. MESH's drift score and injection flags are a new signal type that directly improves dispute outcomes.</td>
+      </tr>
+      <tr>
+        <td>Fraud platforms</td>
+        <td>Signifyd, Forter, Sift, Kount — and eventually Stripe Radar as a strategic partnership</td>
+        <td>MESH's behavioral signal is a data type they cannot produce internally. Their models are trained on human transaction patterns. Agent transactions look like bot attacks to these systems. MESH gives them the ground truth signal to recalibrate.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <!-- SECTION 11: MOAT -->
+  <div class="section-label">Defensibility</div>
+  <h2>The credential format is commodity. The engine is the moat.</h2>
+
+  <p>Within 18 months the basic signed delegation chain will be open infrastructure — the same way TLS became free. MESH's defensibility does not come from the credential format. It comes from four compounding advantages that cannot be replicated by publishing a spec.</p>
+
+  <div class="moat-grid">
+    <div class="moat-card">
+      <div class="moat-num">01</div>
+      <h4>Proprietary behavioral dataset</h4>
+      <p>The drift detection engine trains on what normal agent task execution looks like versus compromised or drifted execution. This dataset accumulates with every ATT issued and every verification run. Proprietary, improves with scale, cannot be copied.</p>
+    </div>
+    <div class="moat-card">
+      <div class="moat-num">02</div>
+      <h4>Two-sided network effect</h4>
+      <p>Every SaaS builder integrating the SDK produces agents that carry ATTs. Every merchant integrating the verify API accepts those agents. More of each makes the network more valuable — the same flywheel that made Stripe's developer ecosystem defensible.</p>
+    </div>
+    <div class="moat-card">
+      <div class="moat-num">03</div>
+      <h4>Standard-setting position</h4>
+      <p>Contributing the runtime state block and engine as official VI spec extensions places MESH at the center of the emerging standard — the way Stripe.js and card tokenization became the default path developers reached for without thinking about it.</p>
+    </div>
+    <div class="moat-card">
+      <div class="moat-num">04</div>
+      <h4>Rail-agnostic positioning</h4>
+      <p>Visa TAP is card-rail bound. ACP is OpenAI/Stripe. UCP is Google. MESH works across every settlement method — cards, USDC, ACH, whatever comes next — because it operates above the rails, not inside them. No single network can internalize it.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- SECTION 12: BUILD SEQUENCE -->
+  <div class="section-label">Build sequence</div>
+  <h2>Three phases. Each unlocks the next.</h2>
+
+  <div class="build-grid">
+    <div class="build-phase">
+      <div class="build-label">Phase 1 — Foundation</div>
+      <div class="build-item">ATT credential format</div>
+      <div class="build-item">Delegation chain + revocation registry</div>
+      <div class="build-item">Intent envelope signing</div>
+      <div class="build-item">Verify API — 6-check, &lt;100ms</div>
+      <div class="build-item">Python + TypeScript SDK</div>
+      <div class="build-item">5 – 10 design partner integrations</div>
+    </div>
+    <div class="build-phase">
+      <div class="build-label">Phase 2 — Engine</div>
+      <div class="build-item">Drift detection engine (ML classifier)</div>
+      <div class="build-item">Prompt hash + injection guard</div>
+      <div class="build-item">Runtime state block + live counters</div>
+      <div class="build-item">API-based agent SDK config layer</div>
+      <div class="build-item">Merchant verify SDK + webhooks</div>
+      <div class="build-item">Deployer dashboard + audit UI</div>
+    </div>
+    <div class="build-phase">
+      <div class="build-label">Phase 3 — Network</div>
+      <div class="build-item">Fraud platform data licensing</div>
+      <div class="build-item">Payment processor partnerships</div>
+      <div class="build-item">VI spec contributor status</div>
+      <div class="build-item">Stablecoin + non-card rail support</div>
+      <div class="build-item">Public agent-ready merchant registry</div>
+      <div class="build-item">Conditional payment layer</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- CLOSING PITCH -->
+  <div class="pitch-block">
+    <div class="pitch-label">The pitch</div>
+    <p>The agentic commerce ecosystem is being built right now. Protocols for <strong>what agents buy</strong> (ACP, UCP) and <strong>how they pay</strong> (TAP, Verifiable Intent) are racing to become standards — and the credential format layer will be open-source infrastructure within 18 months. But every single one of them answers "can this agent pay" and nobody answers "is this agent doing what its human actually told it to do." <strong>MESH is the runtime with engine that fills that gap.</strong> It integrates with two parties: the deployer who builds the agent-powered product, and the merchant who accepts the transaction. OpenAI, Google, and every LLM runtime sit between those two surfaces as interchangeable infrastructure — MESH does not need them to call its API or know it exists. The deployer integrates MESH because their compliance team requires auditability. The merchant integrates MESH because a valid ATT is a chargeback defense document and a fraud signal they cannot produce any other way. As more merchants require ATTs, that demand flows back to every deployer in the ecosystem — creating the network effect that makes MESH the governance layer wrapped around every agent that touches commerce. The credential format is commodity. The behavioral runtime is the moat. That is MESH.</p>
+  </div>
+
+</div>
+
+<div class="doc-footer">
+  MESH &nbsp;·&nbsp; Real-Time Trust Engine &nbsp;·&nbsp; Product Concept Draft v1.0 &nbsp;·&nbsp; March 2026 &nbsp;·&nbsp; Confidential
+</div>
+
+</body>
+</html>
