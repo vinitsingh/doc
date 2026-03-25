@@ -1,0 +1,1594 @@
+openapi: 3.1.0
+info:
+  title: "AXCP — Agentic Exchange & Commerce Protocol"
+  version: "1.2.0-draft"
+  description: |
+    # AXCP v1.2 — Protocol Design Specification
+    ---
+
+    ## Revised Lifecycle
+
+    ```
+    DISCOVER
+        ↓
+    CREATE   — items + buyer + intent_mandate (NO payment)
+        ↓
+    [GET / UPDATE*]  — cart adjustments; merchant issues CartMandate
+        ↓
+    NEGOTIATE-PAYMENT  — agent PATCHes chosen handler_id into session
+        ↓               merchant re-issues CartMandate with handler locked in
+    ← user counter-signs CartMandate client-side (biometric/PIN) →
+        ↓
+    COMPLETE  — signed CartMandate only; no payment fields
+        ↓        merchant calls CP server-to-server to trigger PSP
+    ORDER CREATED
+    ```
+
+    Cancel is available from any pre-completion state.
+
+    ---
+
+    ## Token Flow (CP → PSP, agent not involved)
+
+    ```
+    Agent          Merchant          Credential Provider     PSP
+      │                │                     │                │
+      │  COMPLETE      │                     │                │
+      │  (CartMandate) │                     │                │
+      │───────────────►│                     │                │
+      │                │  resolve_token(     │                │
+      │                │    mandate_id,      │                │
+      │                │    handler_id,      │                │
+      │                │    grand_total)     │                │
+      │                │────────────────────►│                │
+      │                │                     │  payment_token │
+      │                │◄────────────────────│                │
+      │                │                     │                │
+      │                │  SettlementMandate + token           │
+      │                │─────────────────────────────────────►│
+      │                │                     │    captured    │
+      │                │◄─────────────────────────────────────│
+      │  200 order_id  │                     │                │
+      │◄───────────────│                     │                │
+    ```
+
+  contact:
+    name: AXCP Protocol Community
+    url: https://github.com/your-org/axcp
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://api.merchant.example/.well-known/axcp/v1
+    description: Production
+  - url: https://sandbox.merchant.example/.well-known/axcp/v1
+    description: Sandbox
+
+tags:
+  - name: Discovery
+    description: Merchant capability profile
+  - name: Checkout
+    description: Checkout session lifecycle
+  - name: Mandates
+    description: Mandate chain verification utility
+  - name: Catalog
+    description: Product catalog search
+  - name: Orders
+    description: Post-purchase order state
+  - name: Health
+    description: Protocol health
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── DISCOVERY ──────────────────────────────────────────────────────────────
+  /.well-known/axcp:
+    get:
+      tags: [Discovery]
+      operationId: getMerchantProfile
+      summary: Fetch merchant capability profile
+      security: []
+      description: |
+        Returns the merchant's capability profile. Consumer Agents MUST fetch
+        this before starting any session. Critically, this is also where
+        available `payment_handlers` are declared — the agent presents this list
+        to the user during payment negotiation (step 3), not at completion.
+      responses:
+        '200':
+          description: Merchant capability profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantProfile'
+
+  # ── CHECKOUT: CREATE ───────────────────────────────────────────────────────
+  /v1/checkouts:
+    post:
+      tags: [Checkout]
+      operationId: createCheckout
+      summary: "Step 1 — Create session: what to buy"
+      description: |
+        **Concern: WHAT to buy.**
+
+        Submits cart intent — items, buyer context, and the IntentMandate.
+        No payment information whatsoever. Payment handler selection happens
+        separately via `PATCH /{session_id}/payment` after the merchant has
+        computed the exact price.
+
+        ### Why no payment here?
+        - Tax and shipping are computed server-side from the shipping address.
+          You cannot scope a payment token to an unknown amount.
+        - The payment handler belongs in the CartMandate (signed document), not
+          in an unsigned request field. The mandate locks in the handler at the
+          moment of user authorisation.
+
+        ### What the merchant does
+        1. Validates inventory for all requested items
+        2. Computes subtotal, shipping, tax, and any submitted discount codes
+        3. Issues a **preliminary CartMandate** — merchant-signed, `payment_handler_id`
+           field left as `null` until the user selects one
+        4. Returns session with status `pending_payment_selection`
+
+        The `grand_total` in the preliminary CartMandate is the real price.
+        The agent can show this to the user immediately.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutRequest'
+            examples:
+              standard:
+                summary: Standard cart submission — no payment fields
+                value:
+                  presence_mode: "human_present"
+                  line_items:
+                    - catalog_id: "item_headphones_pro"
+                      quantity: 1
+                    - catalog_id: "item_usbc_cable"
+                      quantity: 2
+                  buyer:
+                    email: "jane@example.com"
+                    shipping_address:
+                      name: "Jane Doe"
+                      line1: "123 Main St"
+                      city: "Atlanta"
+                      state: "GA"
+                      postal_code: "30301"
+                      country: "US"
+                  discounts: ["SUMMER15"]
+                  intent_mandate:
+                    mandate_id: "im_001"
+                    signed_by: "did:key:zAgent123"
+                    constraints:
+                      max_amount: 300.00
+                      currency: "USD"
+                      expires_at: "2026-03-24T11:00:00Z"
+                    signature: "eyJhbGciOiJFUzI1NiJ9..."
+              autonomous:
+                summary: Autonomous agent — human_not_present with recurring mandate
+                value:
+                  presence_mode: "human_not_present"
+                  line_items:
+                    - catalog_id: "item_coffee_subscription"
+                      quantity: 1
+                  buyer:
+                    email: "jane@example.com"
+                    shipping_address:
+                      name: "Jane Doe"
+                      line1: "123 Main St"
+                      city: "Atlanta"
+                      state: "GA"
+                      postal_code: "30301"
+                      country: "US"
+                  intent_mandate:
+                    mandate_id: "im_auto_007"
+                    signed_by: "did:key:zAgent123"
+                    constraints:
+                      max_amount: 50.00
+                      currency: "USD"
+                      merchant_id: "merch_abc123"
+                      recurrence: "monthly"
+                      expires_at: "2027-01-01T00:00:00Z"
+                    signature: "eyJhbGciOiJFUzI1NiJ9..."
+      responses:
+        '201':
+          description: |
+            Session created. Preliminary CartMandate issued with computed
+            `grand_total`. Status: `pending_payment_selection`.
+            Agent should now show `grand_total` and `available_payment_handlers`
+            to the user, then call `PATCH /{session_id}/payment`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Duplicate idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ── CHECKOUT: GET ───────────────────────────────────────────────────────────
+  /v1/checkouts/{session_id}:
+    get:
+      tags: [Checkout]
+      operationId: getCheckout
+      summary: Retrieve checkout session
+      description: |
+        Returns current session state including computed totals, CartMandate
+        (with current signing status), and `available_actions`.
+
+        Poll before calling `complete` to ensure the CartMandate hasn't been
+        invalidated by an async merchant-side change (e.g. inventory drop,
+        pricing update).
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      responses:
+        '200':
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    # ── CHECKOUT: UPDATE CART ─────────────────────────────────────────────────
+    patch:
+      tags: [Checkout]
+      operationId: updateCheckout
+      summary: Update cart — items, buyer, discounts
+      description: |
+        Modifies cart contents or buyer details. Specifically does NOT handle
+        payment handler selection — that has its own dedicated sub-resource
+        (`PATCH /{session_id}/payment`) with cleaner semantics.
+
+        **CartMandate invalidation:** Any change that affects the price
+        (add/remove item, discount, shipping address change to a different
+        tax zone) invalidates the CartMandate and triggers a new one.
+        The `payment_handler_id` is preserved across re-issuance if it was
+        already selected.
+
+        **No CartMandate invalidation:** Buyer contact details (email, phone),
+        metadata changes.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCartRequest'
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ── CHECKOUT: NEGOTIATE PAYMENT ───────────────────────────────────────────
+  /v1/checkouts/{session_id}/payment:
+    put:
+      tags: [Checkout]
+      operationId: negotiatePayment
+      summary: "Step 2 — Negotiate payment: how to pay"
+      description: |
+        **Concern: HOW to pay.**
+
+        The agent submits the user's chosen `payment_handler_id`. This is a
+        dedicated sub-resource — not mixed into the cart update — because it
+        triggers a distinct protocol action:
+
+        ### What happens when this is called
+        1. Merchant records `payment_handler_id` on the session
+        2. Merchant **re-issues the CartMandate** with `payment_handler_id` now
+           locked into the signed payload:
+           ```
+           CartMandate {
+             session_id:         "axcp_sess_abc"
+             payment_handler_id: "handler_gpay"   ← locked in
+             grand_total:        94.98             ← locked in
+             line_item_snapshot: [...]             ← locked in
+             merchant_signature: "eyJ..."
+           }
+           ```
+        3. Session moves to `pending_user_signature`
+        4. Response includes the final CartMandate for the user to counter-sign
+
+        ### Why `payment_handler_id` lives here, not in `complete`
+        The handler must be **inside the signed mandate** — it is part of what
+        the user is agreeing to. If the handler were submitted at `complete`,
+        the CartMandate wouldn't capture it, meaning the mandate wouldn't fully
+        describe the transaction. A user could sign for "pay via Google Pay" but
+        the agent could submit "pay via handler_X" — the mandate wouldn't catch it.
+
+        ### What the agent does after this call
+        In `human_present` mode:
+        - Present the CartMandate to the user for counter-signature (client-side
+          via biometric/PIN at the device level — no AXCP endpoint for this)
+        - Once signed, call `complete`
+
+        In `human_not_present` mode:
+        - Agent auto-signs the CartMandate if cart is within IntentMandate bounds
+        - Call `complete` immediately
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NegotiatePaymentRequest'
+            examples:
+              google_pay:
+                summary: User selects Google Pay
+                value:
+                  payment_handler_id: "handler_google_pay"
+              card:
+                summary: User selects card on file
+                value:
+                  payment_handler_id: "handler_card"
+      responses:
+        '200':
+          description: |
+            Payment handler locked. New CartMandate issued with
+            `payment_handler_id` inside the signed payload.
+            Status: `pending_user_signature`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: Payment handler not supported or not available for this cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ── CHECKOUT: CANCEL ──────────────────────────────────────────────────────
+  /v1/checkouts/{session_id}/cancel:
+    post:
+      tags: [Checkout]
+      operationId: cancelCheckout
+      summary: Cancel a checkout session
+      description: |
+        Terminates an active session from any pre-completion state.
+
+        - CartMandate is cryptographically voided (mandate_id added to revocation list)
+        - CP is notified to void any token it may have issued for this mandate_id
+          (the agent never held the token, but the CP may have pre-staged one)
+        - A signed CancelRecord is appended to the mandate chain for audit
+        - Status set to `cancelled` (terminal — cannot be reactivated)
+
+        Idempotent — cancelling an already-cancelled session returns `200`.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      responses:
+        '200':
+          description: Session cancelled; mandate voided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot cancel a completed session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ── CHECKOUT: COMPLETE ────────────────────────────────────────────────────
+  /v1/checkouts/{session_id}/complete:
+    post:
+      tags: [Checkout]
+      operationId: completeCheckout
+      summary: "Step 3 — Complete: authorise and fire"
+      description: |
+        **Concern: AUTHORISE & FIRE.**
+
+        The agent submits **only the signed CartMandate**. No payment handler ID.
+        No payment token. Those details are already inside the mandate and in the
+        merchant's server-side session — the agent doesn't need to re-submit them.
+
+        ### Why the agent submits zero payment credentials
+        The `payment_handler_id` was locked into the CartMandate in step 2.
+        The `DelegatedPaymentToken` is never held by the agent — the merchant
+        calls the CP server-to-server using the `mandate_id` as a reference,
+        and the CP delivers the token directly to the PSP.
+
+        This eliminates the agent as a payment credential intermediary entirely.
+
+        ### Association with the checkout session
+        The CartMandate is self-describing. It carries `session_id` inside its
+        signed payload — so the association is cryptographically enforced, not
+        just a URL convention:
+
+        ```
+        URL path:             /v1/checkouts/axcp_sess_abc/complete
+                                              ▲
+        CartMandate payload:  session_id: "axcp_sess_abc"  (signed by merchant)
+                                              ▲
+                              Both must match — enforced by signature verification
+        ```
+
+        ### Verification sequence (merchant executes before touching PSP)
+        1. Session status == `ready`
+        2. `cart_mandate.session_id` == URL `session_id`
+        3. Merchant's own signature on CartMandate is valid
+        4. User's counter-signature (or agent auto-sig) is valid
+        5. `cart_mandate.grand_total` == server-recomputed total (price drift guard)
+        6. `confirm_total` == `cart_mandate.grand_total` (agent echo guard)
+        7. IntentMandate constraints still satisfied
+        8. Merchant calls CP: `resolve_payment(mandate_id, handler_id, grand_total)`
+        9. CP delivers token to PSP; PSP captures
+        10. Merchant creates order
+
+        **Idempotency key required.** Same key = same response, no double-charge.
+        **Irreversible** once `status: completed` is returned.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AXCPAgent'
+        - $ref: '#/components/parameters/AXCPVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteCheckoutRequest'
+            examples:
+              human_present:
+                summary: Human-present — only the signed CartMandate
+                value:
+                  confirm_total: 94.98
+                  currency: "USD"
+                  cart_mandate:
+                    mandate_id: "cm_001"
+                    session_id: "axcp_sess_a1b2c3d4e5f6g7h8"
+                    merchant_signature: "eyJhbGciOiJFUzI1NiJ9.merchant..."
+                    user_counter_signature: "eyJhbGciOiJFUzI1NiJ9.user..."
+                    signed_at: "2026-03-24T09:44:00Z"
+              autonomous:
+                summary: Autonomous — agent auto-signature within IntentMandate bounds
+                value:
+                  confirm_total: 34.99
+                  currency: "USD"
+                  cart_mandate:
+                    mandate_id: "cm_002"
+                    session_id: "axcp_sess_z9y8x7w6v5u4t3s2"
+                    merchant_signature: "eyJhbGciOiJFUzI1NiJ9.merchant..."
+                    agent_auto_signature: "eyJhbGciOiJFUzI1NiJ9.agent..."
+                    signed_at: "2026-03-24T08:00:00Z"
+      responses:
+        '200':
+          description: Completed. Payment captured server-to-server. Order created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Payment declined by PSP or CP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                declined:
+                  value:
+                    error:
+                      code: "payment_declined"
+                      message: "PSP declined: insufficient funds"
+                      psp_decline_code: "insufficient_funds"
+                cp_error:
+                  value:
+                    error:
+                      code: "cp_token_resolution_failed"
+                      message: "Credential Provider could not resolve token for mandate cm_001"
+                      mandate_id: "cm_001"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: Mandate or amount verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                session_mismatch:
+                  value:
+                    error:
+                      code: "session_mismatch"
+                      message: "cart_mandate.session_id does not match URL session_id"
+                      field: "cart_mandate.session_id"
+                amount_mismatch:
+                  value:
+                    error:
+                      code: "amount_mismatch"
+                      message: "confirm_total 95.00 does not match cart_mandate.grand_total 94.98"
+                      field: "confirm_total"
+                not_ready:
+                  value:
+                    error:
+                      code: "invalid_state"
+                      message: "Session is pending_user_signature. User must counter-sign CartMandate first."
+                      session_status: "pending_user_signature"
+                constraint_violated:
+                  value:
+                    error:
+                      code: "mandate_constraint_violated"
+                      message: "Cart total $94.98 exceeds IntentMandate max_amount $50.00"
+                      mandate_id: "im_001"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ── MANDATES: VERIFY ─────────────────────────────────────────────────────
+  /v1/mandates/verify:
+    post:
+      tags: [Mandates]
+      operationId: verifyMandate
+      summary: Verify a mandate chain (dispute / audit utility)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MandateVerifyRequest'
+      responses:
+        '200':
+          description: Verification report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandateVerifyResponse'
+
+  # ── CATALOG ──────────────────────────────────────────────────────────────
+  /v1/catalog/search:
+    get:
+      tags: [Catalog]
+      operationId: searchCatalog
+      summary: Search product catalog
+      parameters:
+        - $ref: '#/components/parameters/AXCPAgent'
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: max_price, in: query, schema: { type: number } }
+        - { name: currency, in: query, schema: { type: string, default: USD } }
+        - { name: in_stock_only, in: query, schema: { type: boolean, default: true } }
+        - { name: limit, in: query, schema: { type: integer, default: 10, maximum: 50 } }
+      responses:
+        '200':
+          description: Catalog results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogSearchResponse'
+
+  # ── ORDERS ───────────────────────────────────────────────────────────────
+  /v1/orders/{order_id}:
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Retrieve post-purchase order
+      parameters:
+        - { name: order_id, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/AXCPAgent'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── HEALTH ───────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Health]
+      operationId: healthCheck
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.merchant.example/oauth/token
+          scopes:
+            axcp.checkout: Checkout sessions
+            axcp.catalog: Catalog read
+            axcp.orders: Order read
+        authorizationCode:
+          authorizationUrl: https://auth.merchant.example/oauth/authorize
+          tokenUrl: https://auth.merchant.example/oauth/token
+          scopes:
+            axcp.checkout: Checkout sessions
+
+  parameters:
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^axcp_sess_[a-zA-Z0-9]{16,32}$'
+      example: "axcp_sess_a1b2c3d4e5f6g7h8"
+
+    IdempotencyKey:
+      name: AXCP-Idempotency-Key
+      in: header
+      required: false
+      description: Required on all mutating requests. UUID, client-generated.
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    AXCPAgent:
+      name: AXCP-Agent
+      in: header
+      required: true
+      schema:
+        type: string
+      example: 'profile="https://my-agent.example/profiles/shopping-agent.json"'
+
+    AXCPVersion:
+      name: AXCP-Version
+      in: header
+      required: false
+      schema:
+        type: string
+        default: "1.2"
+
+  schemas:
+
+    # ── MERCHANT PROFILE ─────────────────────────────────────────────────────
+    MerchantProfile:
+      type: object
+      required: [axcp_version, merchant_id, capabilities, payment_handlers]
+      properties:
+        axcp_version:
+          type: string
+          example: "1.2"
+        merchant_id:
+          type: string
+          example: "merch_abc123"
+        display_name:
+          type: string
+          example: "Acme Electronics"
+        profile_uri:
+          type: string
+          format: uri
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityDeclaration'
+        payment_handlers:
+          type: array
+          description: |
+            Payment handlers this merchant accepts. The agent presents these to
+            the user after CREATE (when the grand_total is known) and the user
+            selects one. The selection is submitted via
+            `PUT /{session_id}/payment` — NOT at complete.
+          items:
+            $ref: '#/components/schemas/PaymentHandler'
+        extensions:
+          type: array
+          items:
+            type: string
+        trust_anchor:
+          $ref: '#/components/schemas/TrustAnchor'
+
+    CapabilityDeclaration:
+      type: object
+      required: [name, version, endpoint]
+      properties:
+        name:
+          type: string
+          enum: [axcp.checkout, axcp.catalog, axcp.orders, axcp.identity]
+        version:
+          type: string
+        endpoint:
+          type: string
+        supported_presence_modes:
+          type: array
+          items:
+            type: string
+            enum: [human_present, human_not_present]
+
+    PaymentHandler:
+      type: object
+      required: [id, name, type]
+      description: |
+        Describes a payment method. The handler's `id` is what gets locked into
+        the CartMandate when the user selects it via `PUT /{session_id}/payment`.
+        The merchant uses this `id` server-side to call the correct CP for token
+        resolution at complete time. The agent never touches the token.
+      properties:
+        id:
+          type: string
+          example: "handler_google_pay"
+        name:
+          type: string
+          example: "Google Pay"
+        type:
+          type: string
+          enum: [delegated_token, direct_card, bank_transfer, stablecoin]
+        display_icon_url:
+          type: string
+          format: uri
+        constraints:
+          type: object
+          additionalProperties: true
+          description: Handler-specific constraints (geo, max_amount, currency restrictions)
+
+    TrustAnchor:
+      type: object
+      properties:
+        did:
+          type: string
+          example: "did:web:acme.example"
+        signing_key_jwk:
+          type: object
+          additionalProperties: true
+
+    # ── REQUEST BODIES ────────────────────────────────────────────────────────
+
+    CreateCheckoutRequest:
+      type: object
+      required: [presence_mode, line_items, buyer, intent_mandate]
+      description: |
+        Cart intent only. No payment fields.
+        The grand_total is unknown until the merchant computes it server-side.
+        Payment handler selection happens after CREATE via PUT /{id}/payment.
+      properties:
+        presence_mode:
+          $ref: '#/components/schemas/PresenceMode'
+        line_items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+        buyer:
+          $ref: '#/components/schemas/Buyer'
+        discounts:
+          type: array
+          items:
+            type: string
+          example: ["SUMMER15"]
+        intent_mandate:
+          $ref: '#/components/schemas/IntentMandate'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    UpdateCartRequest:
+      type: object
+      description: |
+        Cart and buyer updates only. Does NOT accept payment_handler_id —
+        use PUT /{session_id}/payment for that.
+      properties:
+        line_items:
+          type: object
+          properties:
+            add:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineItemInput'
+            remove:
+              type: array
+              items:
+                type: string
+              description: line_item_id values to remove
+        buyer:
+          $ref: '#/components/schemas/Buyer'
+        discounts:
+          type: object
+          properties:
+            apply:
+              type: array
+              items:
+                type: string
+            remove:
+              type: array
+              items:
+                type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    NegotiatePaymentRequest:
+      type: object
+      required: [payment_handler_id]
+      description: |
+        Selects the payment handler for this session. Triggers the merchant to
+        re-issue the CartMandate with `payment_handler_id` locked into the
+        signed payload. This is the only field — there is nothing else to submit
+        at this stage because the token is handled server-to-server by the
+        merchant and CP at complete time.
+      properties:
+        payment_handler_id:
+          type: string
+          description: |
+            Must be one of the handler `id` values declared in the merchant's
+            capability profile. The agent presents the list from the profile
+            to the user; the user picks one; this field carries that choice.
+          example: "handler_google_pay"
+
+    CancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - user_abandoned
+            - item_unavailable
+            - payment_handler_unavailable
+            - mandate_expired
+            - merchant_initiated
+            - agent_error
+            - session_timeout
+            - other
+        initiated_by:
+          type: string
+          enum: [consumer_agent, merchant_agent, system]
+        notes:
+          type: string
+          maxLength: 500
+
+    CompleteCheckoutRequest:
+      type: object
+      required: [confirm_total, currency, cart_mandate]
+      description: |
+        The terminal action. Contains ONLY the signed CartMandate and a total
+        echo safeguard. No payment_handler_id — it's inside the mandate.
+        No delegated_payment_token — the merchant resolves it server-to-server.
+
+        This is intentionally minimal. All the negotiation happened during
+        the session. This request is just the user's authorisation signal.
+      properties:
+        confirm_total:
+          type: number
+          format: double
+          description: |
+            Agent echoes the grand_total it expects to charge.
+            Must match cart_mandate.grand_total to the cent.
+            Serves as a last-line sanity check against price drift.
+          example: 94.98
+        currency:
+          type: string
+          example: "USD"
+        cart_mandate:
+          $ref: '#/components/schemas/CartMandateSigned'
+
+    # ── RESPONSE BODIES ───────────────────────────────────────────────────────
+
+    CheckoutSession:
+      type: object
+      required: [session_id, status, created_at, updated_at]
+      properties:
+        session_id:
+          type: string
+          example: "axcp_sess_a1b2c3d4e5f6g7h8"
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        presence_mode:
+          $ref: '#/components/schemas/PresenceMode'
+        merchant_id:
+          type: string
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemResolved'
+        buyer:
+          $ref: '#/components/schemas/Buyer'
+        totals:
+          $ref: '#/components/schemas/Totals'
+        discounts_applied:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedDiscount'
+        cart_mandate:
+          $ref: '#/components/schemas/CartMandateIssued'
+          description: |
+            The current merchant-signed CartMandate. Contains the grand_total
+            the user will be charged, the locked-in payment_handler_id (once
+            negotiated), and the session_id binding.
+            The user must counter-sign this before complete can be called.
+        cart_mandate_invalidated:
+          type: boolean
+          description: True if a previous CartMandate was voided by this update
+          example: false
+        available_payment_handlers:
+          type: array
+          description: |
+            Handlers available for this session. Shown to user after CREATE so
+            they can select one. Selection submitted via PUT /{id}/payment.
+          items:
+            $ref: '#/components/schemas/PaymentHandlerSummary'
+        mandate_chain:
+          $ref: '#/components/schemas/MandateChainSummary'
+        available_actions:
+          type: array
+          items:
+            type: string
+            enum:
+              - update_cart
+              - negotiate_payment
+              - await_user_signature
+              - complete
+              - cancel
+          example: ["update_cart", "negotiate_payment", "cancel"]
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    CancelResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        status:
+          type: string
+          enum: [cancelled]
+        cancelled_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        mandate_voided:
+          type: boolean
+          example: true
+        cp_notified:
+          type: boolean
+          description: Whether the CP was notified to void any staged token for this mandate
+          example: true
+        cancel_record_id:
+          type: string
+          example: "cr_axcp_00987"
+
+    CompleteResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        status:
+          type: string
+          enum: [completed]
+        order_id:
+          type: string
+          example: "ord_20260324_00123"
+        completed_at:
+          type: string
+          format: date-time
+        grand_total:
+          type: number
+          format: double
+          example: 94.98
+        currency:
+          type: string
+        settlement:
+          $ref: '#/components/schemas/SettlementRecord'
+        mandate_chain:
+          $ref: '#/components/schemas/MandateChainSummary'
+        receipt_url:
+          type: string
+          format: uri
+
+    # ── MANDATE TYPES ─────────────────────────────────────────────────────────
+
+    IntentMandate:
+      type: object
+      required: [mandate_id, signed_by, constraints, signature]
+      properties:
+        mandate_id:
+          type: string
+          example: "im_001"
+        signed_by:
+          type: string
+          description: DID of the signing key (user's device or agent key)
+          example: "did:key:zAgent123"
+        constraints:
+          type: object
+          required: [max_amount, currency, expires_at]
+          properties:
+            max_amount:
+              type: number
+              format: double
+              example: 300.00
+            currency:
+              type: string
+              example: "USD"
+            merchant_id:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+            allowed_categories:
+              type: array
+              items:
+                type: string
+            recurrence:
+              type: string
+              enum: [once, daily, weekly, monthly, yearly]
+        signature:
+          type: string
+          example: "eyJhbGciOiJFUzI1NiJ9..."
+        issued_at:
+          type: string
+          format: date-time
+
+    CartMandateIssued:
+      type: object
+      description: |
+        Merchant-signed CartMandate returned in the session response.
+        `payment_handler_id` is `null` until `PUT /{session_id}/payment` is called.
+        Once the handler is set, a new CartMandate is issued with it locked in.
+        The user counter-signs this final version before complete is called.
+      properties:
+        mandate_id:
+          type: string
+          example: "cm_001"
+        session_id:
+          type: string
+          description: |
+            Cryptographic binding to the session. This is how checkout and complete
+            are associated — not just a URL parameter, but a field inside the
+            signed payload that cannot be tampered with.
+          example: "axcp_sess_a1b2c3d4e5f6g7h8"
+        intent_mandate_id:
+          type: string
+          example: "im_001"
+        merchant_id:
+          type: string
+          example: "merch_abc123"
+        payment_handler_id:
+          type: string
+          nullable: true
+          description: |
+            Null until negotiate-payment is called. Once set and signed,
+            the merchant uses this server-side to call the correct CP at
+            complete time. The agent never uses this field for anything
+            other than display.
+          example: "handler_google_pay"
+        line_item_snapshot:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemResolved'
+        grand_total:
+          type: number
+          format: double
+          example: 94.98
+        currency:
+          type: string
+          example: "USD"
+        merchant_signature:
+          type: string
+          example: "eyJhbGciOiJFUzI1NiJ9.merchant..."
+        issued_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    CartMandateSigned:
+      type: object
+      required: [mandate_id, session_id, merchant_signature]
+      description: |
+        The CartMandate as submitted in CompleteCheckoutRequest.
+        Carries the user's counter-signature (or agent auto-sig).
+        Note: no payment credentials here — the payment_handler_id is already
+        inside the signed payload and the merchant retrieves the token server-to-server.
+      properties:
+        mandate_id:
+          type: string
+          example: "cm_001"
+        session_id:
+          type: string
+          description: |
+            Must match the session_id in the URL path. Verified by the merchant
+            as part of the signature check — this is the cryptographic association
+            between the checkout session and the complete action.
+          example: "axcp_sess_a1b2c3d4e5f6g7h8"
+        merchant_signature:
+          type: string
+          description: Unchanged from CartMandateIssued
+          example: "eyJhbGciOiJFUzI1NiJ9.merchant..."
+        user_counter_signature:
+          type: string
+          description: User's JWS counter-signature (human_present mode)
+          example: "eyJhbGciOiJFUzI1NiJ9.user..."
+        agent_auto_signature:
+          type: string
+          description: Agent's JWS auto-signature (human_not_present, within IntentMandate bounds)
+          example: "eyJhbGciOiJFUzI1NiJ9.agent..."
+        signed_at:
+          type: string
+          format: date-time
+
+    MandateChainSummary:
+      type: object
+      properties:
+        intent_mandate_id:
+          type: string
+        intent_mandate_status:
+          type: string
+          enum: [valid, expired, violated, revoked]
+        cart_mandate_id:
+          type: string
+        cart_mandate_status:
+          type: string
+          enum: [preliminary, handler_locked, user_signed, voided]
+          description: |
+            preliminary — issued after CREATE, payment_handler_id not yet set
+            handler_locked — handler selected and locked into mandate
+            user_signed — user counter-signature collected, ready to complete
+            voided — mandate revoked (session cancelled)
+        settlement_mandate_id:
+          type: string
+        settlement_mandate_status:
+          type: string
+          enum: [not_issued, issued, settled, failed]
+
+    MandateVerifyRequest:
+      type: object
+      required: [mandates]
+      properties:
+        mandates:
+          type: array
+          items:
+            type: object
+            properties:
+              mandate_type:
+                type: string
+                enum: [intent, cart, settlement]
+              payload:
+                type: object
+                additionalProperties: true
+              signature:
+                type: string
+
+    MandateVerifyResponse:
+      type: object
+      properties:
+        overall_valid:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              mandate_id:
+                type: string
+              valid:
+                type: boolean
+              violations:
+                type: array
+                items:
+                  type: string
+
+    SettlementRecord:
+      type: object
+      description: |
+        Record of PSP settlement. Note: no token value here — the token was
+        exchanged directly between the CP and PSP. Only the PSP's transaction
+        reference is surfaced.
+      properties:
+        settlement_mandate_id:
+          type: string
+          example: "sm_001"
+        psp_transaction_id:
+          type: string
+          example: "psp_txn_abc123"
+        amount_captured:
+          type: number
+          format: double
+        currency:
+          type: string
+        payment_network:
+          type: string
+          example: "VISA"
+        network_auth_code:
+          type: string
+        settled_at:
+          type: string
+          format: date-time
+
+    # ── PRIMITIVES ───────────────────────────────────────────────────────────
+
+    PresenceMode:
+      type: string
+      enum: [human_present, human_not_present]
+
+    SessionStatus:
+      type: string
+      description: |
+        pending_payment_selection — CartMandate issued (preliminary), user picks handler
+        pending_user_signature    — Handler locked in CartMandate, user must counter-sign
+        ready                     — CartMandate fully signed, safe to complete
+        completed                 — Payment settled, order created (terminal)
+        cancelled                 — Terminated before completion (terminal)
+        expired                   — TTL elapsed (terminal)
+      enum:
+        - pending_payment_selection
+        - pending_user_signature
+        - ready
+        - completed
+        - cancelled
+        - expired
+
+    LineItemInput:
+      type: object
+      required: [catalog_id, quantity]
+      properties:
+        catalog_id:
+          type: string
+          example: "item_headphones_pro"
+        quantity:
+          type: integer
+          minimum: 1
+        customizations:
+          type: object
+          additionalProperties: true
+
+    LineItemResolved:
+      allOf:
+        - $ref: '#/components/schemas/LineItemInput'
+        - type: object
+          properties:
+            line_item_id:
+              type: string
+            title:
+              type: string
+            unit_price:
+              type: number
+              format: double
+            line_total:
+              type: number
+              format: double
+            in_stock:
+              type: boolean
+            image_url:
+              type: string
+              format: uri
+
+    Buyer:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        shipping_address:
+          $ref: '#/components/schemas/Address'
+        billing_address:
+          $ref: '#/components/schemas/Address'
+
+    Address:
+      type: object
+      required: [name, line1, city, state, postal_code, country]
+      properties:
+        name:
+          type: string
+        line1:
+          type: string
+        line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postal_code:
+          type: string
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+
+    Totals:
+      type: object
+      properties:
+        subtotal:
+          type: number
+          format: double
+        discount_total:
+          type: number
+          format: double
+        tax_total:
+          type: number
+          format: double
+        shipping_total:
+          type: number
+          format: double
+        grand_total:
+          type: number
+          format: double
+        currency:
+          type: string
+
+    AppliedDiscount:
+      type: object
+      properties:
+        code:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed_amount, free_shipping]
+        value:
+          type: number
+          format: double
+        amount_saved:
+          type: number
+          format: double
+
+    PaymentHandlerSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "handler_google_pay"
+        name:
+          type: string
+          example: "Google Pay"
+        type:
+          type: string
+        display_icon_url:
+          type: string
+          format: uri
+
+    CatalogSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogItem'
+        total_results:
+          type: integer
+        query:
+          type: string
+
+    CatalogItem:
+      type: object
+      properties:
+        catalog_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: double
+        currency:
+          type: string
+        in_stock:
+          type: boolean
+        image_url:
+          type: string
+          format: uri
+        categories:
+          type: array
+          items:
+            type: string
+        fulfillment_options:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [standard_shipping, express_shipping, pickup, digital_delivery]
+              estimated_days:
+                type: integer
+              cost:
+                type: number
+                format: double
+
+    Order:
+      type: object
+      properties:
+        order_id:
+          type: string
+        session_id:
+          type: string
+        status:
+          type: string
+          enum: [confirmed, processing, shipped, delivered, cancelled, refunded]
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemResolved'
+        totals:
+          $ref: '#/components/schemas/Totals'
+        settlement_mandate_id:
+          type: string
+        tracking:
+          type: object
+          properties:
+            carrier:
+              type: string
+            tracking_number:
+              type: string
+            tracking_url:
+              type: string
+              format: uri
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            field:
+              type: string
+            session_status:
+              type: string
+            mandate_id:
+              type: string
+            psp_decline_code:
+              type: string
+            request_id:
+              type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: State conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Business logic validation failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+security:
+  - OAuth2:
+      - axcp.checkout
