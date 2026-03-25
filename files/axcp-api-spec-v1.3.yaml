@@ -1,56 +1,114 @@
 openapi: 3.1.0
 info:
   title: "AXCP — Agentic Exchange & Commerce Protocol"
-  version: "1.2.0-draft"
+  version: "1.3.0-draft"
   description: |
-    # AXCP v1.2 — Protocol Design Specification
-    ---
+    # AXCP v1.3 — Protocol Design Specification
 
-    ## Revised Lifecycle
+    ## What changed from v1.2
 
-    ```
-    DISCOVER
-        ↓
-    CREATE   — items + buyer + intent_mandate (NO payment)
-        ↓
-    [GET / UPDATE*]  — cart adjustments; merchant issues CartMandate
-        ↓
-    NEGOTIATE-PAYMENT  — agent PATCHes chosen handler_id into session
-        ↓               merchant re-issues CartMandate with handler locked in
-    ← user counter-signs CartMandate client-side (biometric/PIN) →
-        ↓
-    COMPLETE  — signed CartMandate only; no payment fields
-        ↓        merchant calls CP server-to-server to trigger PSP
-    ORDER CREATED
-    ```
+    v1.2 introduced a dedicated `PUT /{session_id}/payment` endpoint to let the
+    agent select a payment handler before calling `complete`. This was removed
+    because it created an unnecessary round trip.
 
-    Cancel is available from any pre-completion state.
+    ### Why `/payment` was wrong
+
+    The CartMandate proves **purchase agreement** — what the user is buying and
+    for how much. The payment method is an **execution detail**, not part of the
+    purchase agreement. It does not need to be inside the signed mandate, and it
+    does not need its own endpoint.
+
+    `payment_handler_id` is a **reference** (which Credential Provider to call),
+    not a **credential**. It is safe for the agent to submit it at `complete`
+    time, because the merchant uses it only to know which CP to call
+    server-to-server. The actual payment token still never touches the agent.
 
     ---
 
-    ## Token Flow (CP → PSP, agent not involved)
+    ## The Final Design — Two Phases, Four Endpoints
 
     ```
-    Agent          Merchant          Credential Provider     PSP
-      │                │                     │                │
-      │  COMPLETE      │                     │                │
-      │  (CartMandate) │                     │                │
-      │───────────────►│                     │                │
-      │                │  resolve_token(     │                │
-      │                │    mandate_id,      │                │
-      │                │    handler_id,      │                │
-      │                │    grand_total)     │                │
-      │                │────────────────────►│                │
-      │                │                     │  payment_token │
-      │                │◄────────────────────│                │
-      │                │                     │                │
-      │                │  SettlementMandate + token           │
-      │                │─────────────────────────────────────►│
-      │                │                     │    captured    │
-      │                │◄─────────────────────────────────────│
-      │  200 order_id  │                     │                │
-      │◄───────────────│                     │                │
+    ┌──────────────────────────────────────────────────────────────┐
+    │  PHASE 1 — WHAT TO BUY                                       │
+    │  POST /v1/checkouts                                          │
+    │    → items, buyer, intent_mandate                            │
+    │    ← CartMandate (grand_total locked in)                     │
+    ├──────────────────────────────────────────────────────────────┤
+    │  PHASE 2 — AUTHORISE AND FIRE                                │
+    │  POST /v1/checkouts/{id}/complete                            │
+    │    → signed CartMandate + payment_handler_id + confirm_total │
+    │    ← order_id (payment settled CP→PSP direct)               │
+    └──────────────────────────────────────────────────────────────┘
     ```
+
+    Between phases, the agent presents the CartMandate (grand_total + items)
+    to the user, the user picks a payment handler from the merchant profile
+    list, and the user counter-signs the CartMandate. This all happens
+    client-side — no extra AXCP endpoint needed.
+
+    ---
+
+    ## How Checkout and Complete Are Associated
+
+    The CartMandate is the cryptographic bridge. It contains `session_id` inside
+    its merchant-signed payload. When `complete` is called:
+
+    ```
+    URL path:              /v1/checkouts/axcp_sess_abc/complete
+                                          ▲
+    cart_mandate payload:  session_id: "axcp_sess_abc"  (inside merchant signature)
+                                          ▲
+    These must match — enforced by signature verification, not just routing
+    ```
+
+    ## Why the Agent Never Carries the Payment Token
+
+    `payment_handler_id` in the `complete` request is a reference only — it
+    tells the merchant which Credential Provider to call. The merchant resolves
+    the token server-to-server using the `mandate_id`. The agent never sees
+    the token value.
+
+    ```
+    Agent               Merchant              Credential Provider    PSP
+      │  POST /complete    │                         │                │
+      │  {                 │                         │                │
+      │   cart_mandate,    │                         │                │
+      │   handler_id,      │                         │                │
+      │   confirm_total    │                         │                │
+      │  }                 │                         │                │
+      │───────────────────►│                         │                │
+      │                    │  resolve_payment(        │                │
+      │                    │   mandate_id,            │                │
+      │                    │   handler_id,            │                │
+      │                    │   grand_total)           │                │
+      │                    │────────────────────────►│                │
+      │                    │◄────────────────────────│  token         │
+      │                    │                         │                │
+      │                    │  SettlementMandate + token               │
+      │                    │────────────────────────────────────────►│
+      │                    │◄────────────────────────────────────────│
+      │  200 { order_id }  │                         │                │
+      │◄───────────────────│                         │                │
+    ```
+
+    ## Session Lifecycle
+
+    ```
+    DISCOVER → CREATE → [GET / PATCH*] → COMPLETE
+                  ↓                          ↓
+               CANCEL ←──────────────────────┘ (pre-completion only)
+    ```
+
+    States: `pending_mandate → ready → completed / cancelled / expired`
+
+    ## Transport Headers
+
+    | Header                  | Required       | Description                         |
+    |-------------------------|----------------|-------------------------------------|
+    | `AXCP-Agent`            | Yes            | `profile="<uri>"` agent profile URI |
+    | `AXCP-Version`          | Yes            | e.g. `1.3`                          |
+    | `AXCP-Idempotency-Key`  | POST required  | UUID for safe retries               |
+    | `Authorization`         | Yes            | `Bearer <token>` OAuth 2.0          |
 
   contact:
     name: AXCP Protocol Community
@@ -69,15 +127,14 @@ tags:
   - name: Discovery
     description: Merchant capability profile
   - name: Checkout
-    description: Checkout session lifecycle
+    description: Checkout lifecycle — create, get, update, cancel, complete
   - name: Mandates
-    description: Mandate chain verification utility
+    description: Mandate chain verification
   - name: Catalog
-    description: Product catalog search
+    description: Product catalog
   - name: Orders
-    description: Post-purchase order state
+    description: Post-purchase orders
   - name: Health
-    description: Protocol health
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
@@ -92,10 +149,10 @@ paths:
       summary: Fetch merchant capability profile
       security: []
       description: |
-        Returns the merchant's capability profile. Consumer Agents MUST fetch
-        this before starting any session. Critically, this is also where
-        available `payment_handlers` are declared — the agent presents this list
-        to the user during payment negotiation (step 3), not at completion.
+        Returns the merchant's capability profile. Agents fetch this before any
+        session. The `payment_handlers` list is what the agent presents to the
+        user when they need to select a payment method — this happens client-side
+        between CREATE and COMPLETE. No extra API call needed.
       responses:
         '200':
           description: Merchant capability profile
@@ -103,37 +160,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MerchantProfile'
+              example:
+                axcp_version: "1.3"
+                merchant_id: "merch_abc123"
+                display_name: "Acme Electronics"
+                profile_uri: "https://acme.example/.well-known/axcp"
+                capabilities:
+                  - name: "axcp.checkout"
+                    version: "1.3"
+                    endpoint: "/v1/checkouts"
+                  - name: "axcp.catalog"
+                    version: "1.0"
+                    endpoint: "/v1/catalog"
+                  - name: "axcp.orders"
+                    version: "1.0"
+                    endpoint: "/v1/orders"
+                payment_handlers:
+                  - id: "handler_google_pay"
+                    name: "Google Pay"
+                    type: "delegated_token"
+                    display_icon_url: "https://acme.example/icons/gpay.svg"
+                  - id: "handler_apple_pay"
+                    name: "Apple Pay"
+                    type: "delegated_token"
+                    display_icon_url: "https://acme.example/icons/apay.svg"
+                  - id: "handler_stripe_card"
+                    name: "Credit / Debit Card"
+                    type: "delegated_token"
+                    display_icon_url: "https://acme.example/icons/card.svg"
+                trust_anchor:
+                  did: "did:web:acme.example"
+                  signing_key_jwk:
+                    kty: "EC"
+                    crv: "P-256"
+                    x: "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU"
+                    y: "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"
 
-  # ── CHECKOUT: CREATE ───────────────────────────────────────────────────────
+  # ── CREATE ─────────────────────────────────────────────────────────────────
   /v1/checkouts:
     post:
       tags: [Checkout]
       operationId: createCheckout
-      summary: "Step 1 — Create session: what to buy"
+      summary: Create a checkout session
       description: |
-        **Concern: WHAT to buy.**
+        Phase 1 — WHAT TO BUY.
 
-        Submits cart intent — items, buyer context, and the IntentMandate.
-        No payment information whatsoever. Payment handler selection happens
-        separately via `PATCH /{session_id}/payment` after the merchant has
-        computed the exact price.
+        Submits cart intent: items, buyer, and the user-signed IntentMandate.
+        No payment information. The grand_total is unknown until the merchant
+        computes tax, shipping, and discounts server-side.
 
-        ### Why no payment here?
-        - Tax and shipping are computed server-side from the shipping address.
-          You cannot scope a payment token to an unknown amount.
-        - The payment handler belongs in the CartMandate (signed document), not
-          in an unsigned request field. The mandate locks in the handler at the
-          moment of user authorisation.
+        The merchant responds with a CartMandate — a merchant-signed document
+        containing the session_id, exact items, and grand_total. The agent
+        presents this to the user, who:
+        1. Sees the final price
+        2. Picks a payment handler from the merchant profile list (client-side)
+        3. Counter-signs the CartMandate (biometric / PIN on device)
 
-        ### What the merchant does
-        1. Validates inventory for all requested items
-        2. Computes subtotal, shipping, tax, and any submitted discount codes
-        3. Issues a **preliminary CartMandate** — merchant-signed, `payment_handler_id`
-           field left as `null` until the user selects one
-        4. Returns session with status `pending_payment_selection`
+        Then the agent calls complete.
 
-        The `grand_total` in the preliminary CartMandate is the real price.
-        The agent can show this to the user immediately.
+        **Idempotency key required.**
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/AXCPAgent'
@@ -145,8 +230,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateCheckoutRequest'
             examples:
-              standard:
-                summary: Standard cart submission — no payment fields
+              human_present:
+                summary: Standard human-present checkout
                 value:
                   presence_mode: "human_present"
                   line_items:
@@ -172,8 +257,8 @@ paths:
                       currency: "USD"
                       expires_at: "2026-03-24T11:00:00Z"
                     signature: "eyJhbGciOiJFUzI1NiJ9..."
-              autonomous:
-                summary: Autonomous agent — human_not_present with recurring mandate
+              human_not_present:
+                summary: Autonomous agent checkout
                 value:
                   presence_mode: "human_not_present"
                   line_items:
@@ -201,10 +286,10 @@ paths:
       responses:
         '201':
           description: |
-            Session created. Preliminary CartMandate issued with computed
-            `grand_total`. Status: `pending_payment_selection`.
-            Agent should now show `grand_total` and `available_payment_handlers`
-            to the user, then call `PATCH /{session_id}/payment`.
+            Session created. CartMandate issued with computed grand_total.
+            Status: `pending_mandate`.
+            Agent should now present the CartMandate to the user for review,
+            handler selection, and counter-signature, then call complete.
           content:
             application/json:
               schema:
@@ -224,19 +309,20 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  # ── CHECKOUT: GET ───────────────────────────────────────────────────────────
+  # ── GET ────────────────────────────────────────────────────────────────────
   /v1/checkouts/{session_id}:
     get:
       tags: [Checkout]
       operationId: getCheckout
-      summary: Retrieve checkout session
+      summary: Retrieve a checkout session
       description: |
-        Returns current session state including computed totals, CartMandate
-        (with current signing status), and `available_actions`.
+        Returns current session state. Recommended: call GET immediately before
+        complete to confirm the CartMandate hasn't been invalidated by a
+        merchant-side change (inventory drop, pricing update).
 
-        Poll before calling `complete` to ensure the CartMandate hasn't been
-        invalidated by an async merchant-side change (e.g. inventory drop,
-        pricing update).
+        The response always includes the current CartMandate and
+        `available_payment_handlers` so the agent can re-render the payment
+        selection UI if needed without refetching the merchant profile.
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/AXCPAgent'
@@ -255,24 +341,21 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-    # ── CHECKOUT: UPDATE CART ─────────────────────────────────────────────────
+  # ── UPDATE ────────────────────────────────────────────────────────────────
     patch:
       tags: [Checkout]
       operationId: updateCheckout
-      summary: Update cart — items, buyer, discounts
+      summary: Update cart or buyer details
       description: |
-        Modifies cart contents or buyer details. Specifically does NOT handle
-        payment handler selection — that has its own dedicated sub-resource
-        (`PATCH /{session_id}/payment`) with cleaner semantics.
+        Modifies an active session. Any change that affects pricing (add/remove
+        items, discount, shipping address to a different tax zone) invalidates
+        the current CartMandate and triggers a new one — the agent must
+        re-collect the user's counter-signature before completing.
 
-        **CartMandate invalidation:** Any change that affects the price
-        (add/remove item, discount, shipping address change to a different
-        tax zone) invalidates the CartMandate and triggers a new one.
-        The `payment_handler_id` is preserved across re-issuance if it was
-        already selected.
+        Non-price changes (buyer email, phone, metadata) do not invalidate
+        the CartMandate.
 
-        **No CartMandate invalidation:** Buyer contact details (email, phone),
-        metadata changes.
+        Not accepted: `payment_handler_id` — that is submitted at complete.
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -283,10 +366,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateCartRequest'
+              $ref: '#/components/schemas/UpdateCheckoutRequest'
+            examples:
+              add_item:
+                value:
+                  line_items:
+                    add:
+                      - catalog_id: "item_mouse_pad"
+                        quantity: 1
+              apply_discount:
+                value:
+                  discounts:
+                    apply: ["WELCOME10"]
+              update_contact:
+                value:
+                  buyer:
+                    email: "jane.doe@example.com"
       responses:
         '200':
-          description: Updated session
+          description: |
+            Updated session. If `cart_mandate_invalidated: true`, the agent
+            must re-collect user counter-signature before calling complete.
           content:
             application/json:
               schema:
@@ -304,114 +404,19 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  # ── CHECKOUT: NEGOTIATE PAYMENT ───────────────────────────────────────────
-  /v1/checkouts/{session_id}/payment:
-    put:
-      tags: [Checkout]
-      operationId: negotiatePayment
-      summary: "Step 2 — Negotiate payment: how to pay"
-      description: |
-        **Concern: HOW to pay.**
-
-        The agent submits the user's chosen `payment_handler_id`. This is a
-        dedicated sub-resource — not mixed into the cart update — because it
-        triggers a distinct protocol action:
-
-        ### What happens when this is called
-        1. Merchant records `payment_handler_id` on the session
-        2. Merchant **re-issues the CartMandate** with `payment_handler_id` now
-           locked into the signed payload:
-           ```
-           CartMandate {
-             session_id:         "axcp_sess_abc"
-             payment_handler_id: "handler_gpay"   ← locked in
-             grand_total:        94.98             ← locked in
-             line_item_snapshot: [...]             ← locked in
-             merchant_signature: "eyJ..."
-           }
-           ```
-        3. Session moves to `pending_user_signature`
-        4. Response includes the final CartMandate for the user to counter-sign
-
-        ### Why `payment_handler_id` lives here, not in `complete`
-        The handler must be **inside the signed mandate** — it is part of what
-        the user is agreeing to. If the handler were submitted at `complete`,
-        the CartMandate wouldn't capture it, meaning the mandate wouldn't fully
-        describe the transaction. A user could sign for "pay via Google Pay" but
-        the agent could submit "pay via handler_X" — the mandate wouldn't catch it.
-
-        ### What the agent does after this call
-        In `human_present` mode:
-        - Present the CartMandate to the user for counter-signature (client-side
-          via biometric/PIN at the device level — no AXCP endpoint for this)
-        - Once signed, call `complete`
-
-        In `human_not_present` mode:
-        - Agent auto-signs the CartMandate if cart is within IntentMandate bounds
-        - Call `complete` immediately
-      parameters:
-        - $ref: '#/components/parameters/SessionId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/AXCPAgent'
-        - $ref: '#/components/parameters/AXCPVersion'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NegotiatePaymentRequest'
-            examples:
-              google_pay:
-                summary: User selects Google Pay
-                value:
-                  payment_handler_id: "handler_google_pay"
-              card:
-                summary: User selects card on file
-                value:
-                  payment_handler_id: "handler_card"
-      responses:
-        '200':
-          description: |
-            Payment handler locked. New CartMandate issued with
-            `payment_handler_id` inside the signed payload.
-            Status: `pending_user_signature`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CheckoutSession'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          description: Payment handler not supported or not available for this cart
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  # ── CHECKOUT: CANCEL ──────────────────────────────────────────────────────
+  # ── CANCEL ────────────────────────────────────────────────────────────────
   /v1/checkouts/{session_id}/cancel:
     post:
       tags: [Checkout]
       operationId: cancelCheckout
       summary: Cancel a checkout session
       description: |
-        Terminates an active session from any pre-completion state.
+        Terminates the session from any pre-completion state.
+        - CartMandate is cryptographically voided
+        - CP is notified to invalidate any pre-staged token for this mandate_id
+        - CancelRecord appended to mandate chain for audit
 
-        - CartMandate is cryptographically voided (mandate_id added to revocation list)
-        - CP is notified to void any token it may have issued for this mandate_id
-          (the agent never held the token, but the CP may have pre-staged one)
-        - A signed CancelRecord is appended to the mandate chain for audit
-        - Status set to `cancelled` (terminal — cannot be reactivated)
-
-        Idempotent — cancelling an already-cancelled session returns `200`.
+        Idempotent. Cannot cancel a completed session.
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/AXCPAgent'
@@ -442,53 +447,59 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  # ── CHECKOUT: COMPLETE ────────────────────────────────────────────────────
+  # ── COMPLETE ──────────────────────────────────────────────────────────────
   /v1/checkouts/{session_id}/complete:
     post:
       tags: [Checkout]
       operationId: completeCheckout
-      summary: "Step 3 — Complete: authorise and fire"
+      summary: Complete the checkout — submit signed mandate and payment handler
       description: |
-        **Concern: AUTHORISE & FIRE.**
+        Phase 2 — AUTHORISE AND FIRE.
 
-        The agent submits **only the signed CartMandate**. No payment handler ID.
-        No payment token. Those details are already inside the mandate and in the
-        merchant's server-side session — the agent doesn't need to re-submit them.
+        The agent submits three things:
+        1. **`cart_mandate`** — the CartMandate with the user's counter-signature.
+           This is the purchase authorisation. It contains `session_id` inside its
+           signed payload — the cryptographic link to the checkout session.
+        2. **`payment_handler_id`** — which handler to use. This is a reference,
+           not a credential. The merchant uses it to call the correct Credential
+           Provider server-to-server. The agent never sees the token.
+        3. **`confirm_total`** — the agent echoes the grand_total it expects to be
+           charged. Must match the CartMandate. Guards against price drift.
 
-        ### Why the agent submits zero payment credentials
-        The `payment_handler_id` was locked into the CartMandate in step 2.
-        The `DelegatedPaymentToken` is never held by the agent — the merchant
-        calls the CP server-to-server using the `mandate_id` as a reference,
-        and the CP delivers the token directly to the PSP.
+        ### Why `payment_handler_id` is here and not in a separate endpoint
+        The handler is an execution reference, not part of the purchase agreement.
+        It does not need to be inside the signed CartMandate, and it does not need
+        its own round trip. Submitting it at complete is correct — it is the
+        instruction to the merchant for how to execute the payment, delivered at
+        the moment of authorisation.
 
-        This eliminates the agent as a payment credential intermediary entirely.
-
-        ### Association with the checkout session
-        The CartMandate is self-describing. It carries `session_id` inside its
-        signed payload — so the association is cryptographically enforced, not
-        just a URL convention:
-
+        ### What the merchant does with it
         ```
-        URL path:             /v1/checkouts/axcp_sess_abc/complete
-                                              ▲
-        CartMandate payload:  session_id: "axcp_sess_abc"  (signed by merchant)
-                                              ▲
-                              Both must match — enforced by signature verification
+        merchant.resolve_payment(
+          mandate_id:   cart_mandate.mandate_id,
+          handler_id:   payment_handler_id,    ← from this request
+          grand_total:  cart_mandate.grand_total
+        )
+        → CP delivers token to PSP directly
+        → PSP captures
+        → merchant creates order
         ```
 
-        ### Verification sequence (merchant executes before touching PSP)
+        The agent never touches the token.
+
+        ### Verification sequence
         1. Session status == `ready`
         2. `cart_mandate.session_id` == URL `session_id`
-        3. Merchant's own signature on CartMandate is valid
-        4. User's counter-signature (or agent auto-sig) is valid
-        5. `cart_mandate.grand_total` == server-recomputed total (price drift guard)
-        6. `confirm_total` == `cart_mandate.grand_total` (agent echo guard)
+        3. Merchant signature on CartMandate is valid
+        4. User counter-signature (or agent auto-sig) is valid
+        5. `cart_mandate.grand_total` == server-recomputed total
+        6. `confirm_total` == `cart_mandate.grand_total`
         7. IntentMandate constraints still satisfied
-        8. Merchant calls CP: `resolve_payment(mandate_id, handler_id, grand_total)`
-        9. CP delivers token to PSP; PSP captures
-        10. Merchant creates order
+        8. `payment_handler_id` is declared in merchant profile
+        9. Merchant calls CP → CP delivers token to PSP → PSP captures
+        10. Order created
 
-        **Idempotency key required.** Same key = same response, no double-charge.
+        **Idempotency key required.**
         **Irreversible** once `status: completed` is returned.
       parameters:
         - $ref: '#/components/parameters/SessionId'
@@ -503,21 +514,23 @@ paths:
               $ref: '#/components/schemas/CompleteCheckoutRequest'
             examples:
               human_present:
-                summary: Human-present — only the signed CartMandate
+                summary: User-signed completion
                 value:
                   confirm_total: 94.98
                   currency: "USD"
+                  payment_handler_id: "handler_google_pay"
                   cart_mandate:
                     mandate_id: "cm_001"
                     session_id: "axcp_sess_a1b2c3d4e5f6g7h8"
                     merchant_signature: "eyJhbGciOiJFUzI1NiJ9.merchant..."
                     user_counter_signature: "eyJhbGciOiJFUzI1NiJ9.user..."
                     signed_at: "2026-03-24T09:44:00Z"
-              autonomous:
-                summary: Autonomous — agent auto-signature within IntentMandate bounds
+              human_not_present:
+                summary: Agent auto-signed completion
                 value:
                   confirm_total: 34.99
                   currency: "USD"
+                  payment_handler_id: "handler_stripe_card"
                   cart_mandate:
                     mandate_id: "cm_002"
                     session_id: "axcp_sess_z9y8x7w6v5u4t3s2"
@@ -526,7 +539,8 @@ paths:
                     signed_at: "2026-03-24T08:00:00Z"
       responses:
         '200':
-          description: Completed. Payment captured server-to-server. Order created.
+          description: |
+            Checkout completed. Payment settled CP→PSP direct. Order created.
           content:
             application/json:
               schema:
@@ -536,19 +550,20 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '402':
-          description: Payment declined by PSP or CP
+          description: Payment declined by PSP or token resolution failed at CP
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                declined:
+                payment_declined:
                   value:
                     error:
                       code: "payment_declined"
                       message: "PSP declined: insufficient funds"
                       psp_decline_code: "insufficient_funds"
-                cp_error:
+                      mandate_id: "cm_001"
+                cp_failed:
                   value:
                     error:
                       code: "cp_token_resolution_failed"
@@ -581,23 +596,30 @@ paths:
                   value:
                     error:
                       code: "invalid_state"
-                      message: "Session is pending_user_signature. User must counter-sign CartMandate first."
-                      session_status: "pending_user_signature"
+                      message: "CartMandate awaiting user counter-signature."
+                      session_status: "pending_mandate"
                 constraint_violated:
                   value:
                     error:
                       code: "mandate_constraint_violated"
                       message: "Cart total $94.98 exceeds IntentMandate max_amount $50.00"
                       mandate_id: "im_001"
+                unknown_handler:
+                  value:
+                    error:
+                      code: "unknown_payment_handler"
+                      message: "handler_xyz is not declared in the merchant profile"
+                      field: "payment_handler_id"
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  # ── MANDATES: VERIFY ─────────────────────────────────────────────────────
+  # ── MANDATES: VERIFY ──────────────────────────────────────────────────────
   /v1/mandates/verify:
     post:
       tags: [Mandates]
       operationId: verifyMandate
-      summary: Verify a mandate chain (dispute / audit utility)
+      summary: Verify a mandate chain
+      description: Utility for PSPs, auditors, and dispute resolution.
       requestBody:
         required: true
         content:
@@ -611,8 +633,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MandateVerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
-  # ── CATALOG ──────────────────────────────────────────────────────────────
+  # ── CATALOG ───────────────────────────────────────────────────────────────
   /v1/catalog/search:
     get:
       tags: [Catalog]
@@ -620,11 +644,11 @@ paths:
       summary: Search product catalog
       parameters:
         - $ref: '#/components/parameters/AXCPAgent'
-        - { name: q, in: query, required: true, schema: { type: string } }
-        - { name: max_price, in: query, schema: { type: number } }
-        - { name: currency, in: query, schema: { type: string, default: USD } }
+        - { name: q,             in: query, required: true, schema: { type: string } }
+        - { name: max_price,     in: query, schema: { type: number } }
+        - { name: currency,      in: query, schema: { type: string, default: USD } }
         - { name: in_stock_only, in: query, schema: { type: boolean, default: true } }
-        - { name: limit, in: query, schema: { type: integer, default: 10, maximum: 50 } }
+        - { name: limit,         in: query, schema: { type: integer, default: 10, maximum: 50 } }
       responses:
         '200':
           description: Catalog results
@@ -633,12 +657,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CatalogSearchResponse'
 
-  # ── ORDERS ───────────────────────────────────────────────────────────────
+  # ── ORDERS ────────────────────────────────────────────────────────────────
   /v1/orders/{order_id}:
     get:
       tags: [Orders]
       operationId: getOrder
-      summary: Retrieve post-purchase order
+      summary: Retrieve order
       parameters:
         - { name: order_id, in: path, required: true, schema: { type: string } }
         - $ref: '#/components/parameters/AXCPAgent'
@@ -654,7 +678,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  # ── HEALTH ───────────────────────────────────────────────────────────────
+  # ── HEALTH ────────────────────────────────────────────────────────────────
   /health:
     get:
       tags: [Health]
@@ -704,7 +728,7 @@ components:
       name: AXCP-Idempotency-Key
       in: header
       required: false
-      description: Required on all mutating requests. UUID, client-generated.
+      description: UUID. Required on all POST requests.
       schema:
         type: string
         format: uuid
@@ -724,18 +748,18 @@ components:
       required: false
       schema:
         type: string
-        default: "1.2"
+        default: "1.3"
 
   schemas:
 
-    # ── MERCHANT PROFILE ─────────────────────────────────────────────────────
+    # ── PROFILE ───────────────────────────────────────────────────────────────
     MerchantProfile:
       type: object
       required: [axcp_version, merchant_id, capabilities, payment_handlers]
       properties:
         axcp_version:
           type: string
-          example: "1.2"
+          example: "1.3"
         merchant_id:
           type: string
           example: "merch_abc123"
@@ -752,16 +776,17 @@ components:
         payment_handlers:
           type: array
           description: |
-            Payment handlers this merchant accepts. The agent presents these to
-            the user after CREATE (when the grand_total is known) and the user
-            selects one. The selection is submitted via
-            `PUT /{session_id}/payment` — NOT at complete.
+            Available payment handlers. The agent presents this list to the user
+            after the CartMandate is issued (price is now known) and the user
+            selects one. The selected `id` is submitted in CompleteCheckoutRequest.
+            No separate API call needed for selection.
           items:
             $ref: '#/components/schemas/PaymentHandler'
         extensions:
           type: array
           items:
             type: string
+          example: ["axcp.ext.loyalty", "axcp.ext.subscriptions"]
         trust_anchor:
           $ref: '#/components/schemas/TrustAnchor'
 
@@ -786,10 +811,10 @@ components:
       type: object
       required: [id, name, type]
       description: |
-        Describes a payment method. The handler's `id` is what gets locked into
-        the CartMandate when the user selects it via `PUT /{session_id}/payment`.
-        The merchant uses this `id` server-side to call the correct CP for token
-        resolution at complete time. The agent never touches the token.
+        A payment handler declaration. The `id` is what gets submitted in
+        CompleteCheckoutRequest.payment_handler_id. The merchant maps this `id`
+        to the correct Credential Provider server-side — the agent only knows
+        the display name and icon for rendering the selection UI.
       properties:
         id:
           type: string
@@ -806,7 +831,7 @@ components:
         constraints:
           type: object
           additionalProperties: true
-          description: Handler-specific constraints (geo, max_amount, currency restrictions)
+          description: Optional handler constraints (geo, currency, max_amount)
 
     TrustAnchor:
       type: object
@@ -818,15 +843,15 @@ components:
           type: object
           additionalProperties: true
 
-    # ── REQUEST BODIES ────────────────────────────────────────────────────────
+    # ── REQUESTS ──────────────────────────────────────────────────────────────
 
     CreateCheckoutRequest:
       type: object
       required: [presence_mode, line_items, buyer, intent_mandate]
       description: |
-        Cart intent only. No payment fields.
-        The grand_total is unknown until the merchant computes it server-side.
-        Payment handler selection happens after CREATE via PUT /{id}/payment.
+        Cart intent only. No payment_handler_id. No token.
+        Payment selection happens client-side after the CartMandate is issued,
+        and the selected handler_id is submitted at complete.
       properties:
         presence_mode:
           $ref: '#/components/schemas/PresenceMode'
@@ -848,11 +873,11 @@ components:
           type: object
           additionalProperties: true
 
-    UpdateCartRequest:
+    UpdateCheckoutRequest:
       type: object
       description: |
-        Cart and buyer updates only. Does NOT accept payment_handler_id —
-        use PUT /{session_id}/payment for that.
+        Cart and buyer updates. Does NOT accept payment_handler_id —
+        that is submitted at complete.
       properties:
         line_items:
           type: object
@@ -883,24 +908,6 @@ components:
           type: object
           additionalProperties: true
 
-    NegotiatePaymentRequest:
-      type: object
-      required: [payment_handler_id]
-      description: |
-        Selects the payment handler for this session. Triggers the merchant to
-        re-issue the CartMandate with `payment_handler_id` locked into the
-        signed payload. This is the only field — there is nothing else to submit
-        at this stage because the token is handled server-to-server by the
-        merchant and CP at complete time.
-      properties:
-        payment_handler_id:
-          type: string
-          description: |
-            Must be one of the handler `id` values declared in the merchant's
-            capability profile. The agent presents the list from the profile
-            to the user; the user picks one; this field carries that choice.
-          example: "handler_google_pay"
-
     CancelRequest:
       type: object
       properties:
@@ -924,30 +931,48 @@ components:
 
     CompleteCheckoutRequest:
       type: object
-      required: [confirm_total, currency, cart_mandate]
+      required: [confirm_total, currency, payment_handler_id, cart_mandate]
       description: |
-        The terminal action. Contains ONLY the signed CartMandate and a total
-        echo safeguard. No payment_handler_id — it's inside the mandate.
-        No delegated_payment_token — the merchant resolves it server-to-server.
+        The terminal action. Three fields, three purposes:
 
-        This is intentionally minimal. All the negotiation happened during
-        the session. This request is just the user's authorisation signal.
+        1. `cart_mandate` — the purchase authorisation. Contains session_id
+           inside the merchant's signature, cryptographically linking this
+           complete request to the checkout session.
+
+        2. `payment_handler_id` — execution reference. Tells the merchant which
+           Credential Provider to call. Not a credential — just an identifier.
+           The merchant resolves the actual token server-to-server using the
+           mandate_id. The agent never sees the token.
+
+        3. `confirm_total` — safeguard. The agent echoes the amount it expects
+           to be charged. Rejected if it doesn't match cart_mandate.grand_total.
+
+        Nothing else is needed. All other context (items, price, merchant,
+        intent constraints) is inside the signed CartMandate.
       properties:
         confirm_total:
           type: number
           format: double
           description: |
-            Agent echoes the grand_total it expects to charge.
             Must match cart_mandate.grand_total to the cent.
-            Serves as a last-line sanity check against price drift.
+            Guards against silent price drift between session creation and completion.
           example: 94.98
         currency:
           type: string
           example: "USD"
+        payment_handler_id:
+          type: string
+          description: |
+            ID of a handler declared in the merchant's capability profile.
+            The agent presents the handler list (from the profile) to the user
+            after CREATE; the user picks one; this field carries that choice.
+            The merchant uses this to call the correct CP at settlement time.
+            The agent never receives or submits the resulting token.
+          example: "handler_google_pay"
         cart_mandate:
           $ref: '#/components/schemas/CartMandateSigned'
 
-    # ── RESPONSE BODIES ───────────────────────────────────────────────────────
+    # ── RESPONSES ─────────────────────────────────────────────────────────────
 
     CheckoutSession:
       type: object
@@ -962,6 +987,7 @@ components:
           $ref: '#/components/schemas/PresenceMode'
         merchant_id:
           type: string
+          example: "merch_abc123"
         line_items:
           type: array
           items:
@@ -977,34 +1003,33 @@ components:
         cart_mandate:
           $ref: '#/components/schemas/CartMandateIssued'
           description: |
-            The current merchant-signed CartMandate. Contains the grand_total
-            the user will be charged, the locked-in payment_handler_id (once
-            negotiated), and the session_id binding.
-            The user must counter-sign this before complete can be called.
+            Current merchant-signed CartMandate. Contains grand_total and
+            session_id inside the signed payload. The agent presents this to
+            the user for review and counter-signature before calling complete.
         cart_mandate_invalidated:
           type: boolean
-          description: True if a previous CartMandate was voided by this update
+          description: |
+            True when a previous CartMandate was voided by this update.
+            Agent must re-collect the user's counter-signature.
           example: false
         available_payment_handlers:
           type: array
           description: |
-            Handlers available for this session. Shown to user after CREATE so
-            they can select one. Selection submitted via PUT /{id}/payment.
+            Handlers available for this session. Present these to the user
+            after showing the CartMandate (so they know the final price before
+            selecting a payment method). The selected handler's `id` goes into
+            CompleteCheckoutRequest.payment_handler_id.
           items:
             $ref: '#/components/schemas/PaymentHandlerSummary'
         mandate_chain:
           $ref: '#/components/schemas/MandateChainSummary'
         available_actions:
           type: array
+          description: Actions the agent may take from this state
           items:
             type: string
-            enum:
-              - update_cart
-              - negotiate_payment
-              - await_user_signature
-              - complete
-              - cancel
-          example: ["update_cart", "negotiate_payment", "cancel"]
+            enum: [update, cancel, complete]
+          example: ["update", "cancel", "complete"]
         metadata:
           type: object
           additionalProperties: true
@@ -1017,6 +1042,7 @@ components:
         expires_at:
           type: string
           format: date-time
+          description: 15 min for human_present; 24 hr for human_not_present
 
     CancelResponse:
       type: object
@@ -1036,7 +1062,7 @@ components:
           example: true
         cp_notified:
           type: boolean
-          description: Whether the CP was notified to void any staged token for this mandate
+          description: Whether CP was notified to void any pre-staged token for this mandate
           example: true
         cancel_record_id:
           type: string
@@ -1075,13 +1101,17 @@ components:
     IntentMandate:
       type: object
       required: [mandate_id, signed_by, constraints, signature]
+      description: |
+        User-signed shopping intent. Authorises the agent to act within
+        defined constraints. Both human_present and human_not_present flows
+        require an IntentMandate.
       properties:
         mandate_id:
           type: string
           example: "im_001"
         signed_by:
           type: string
-          description: DID of the signing key (user's device or agent key)
+          description: DID of the signing key
           example: "did:key:zAgent123"
         constraints:
           type: object
@@ -1096,6 +1126,7 @@ components:
               example: "USD"
             merchant_id:
               type: string
+              description: Restricts mandate to one merchant if set
             expires_at:
               type: string
               format: date-time
@@ -1117,9 +1148,9 @@ components:
       type: object
       description: |
         Merchant-signed CartMandate returned in the session response.
-        `payment_handler_id` is `null` until `PUT /{session_id}/payment` is called.
-        Once the handler is set, a new CartMandate is issued with it locked in.
-        The user counter-signs this final version before complete is called.
+        Contains session_id inside the signed payload — this is the
+        cryptographic association between the checkout session and the
+        complete request that will reference it.
       properties:
         mandate_id:
           type: string
@@ -1127,9 +1158,10 @@ components:
         session_id:
           type: string
           description: |
-            Cryptographic binding to the session. This is how checkout and complete
-            are associated — not just a URL parameter, but a field inside the
-            signed payload that cannot be tampered with.
+            Inside the merchant's signature. Binds this mandate to the session.
+            When the agent submits this mandate in complete, the merchant
+            extracts and verifies session_id from the signed payload — not
+            just from the URL.
           example: "axcp_sess_a1b2c3d4e5f6g7h8"
         intent_mandate_id:
           type: string
@@ -1137,28 +1169,22 @@ components:
         merchant_id:
           type: string
           example: "merch_abc123"
-        payment_handler_id:
-          type: string
-          nullable: true
-          description: |
-            Null until negotiate-payment is called. Once set and signed,
-            the merchant uses this server-side to call the correct CP at
-            complete time. The agent never uses this field for anything
-            other than display.
-          example: "handler_google_pay"
         line_item_snapshot:
           type: array
+          description: Immutable cart snapshot at mandate issuance time
           items:
             $ref: '#/components/schemas/LineItemResolved'
         grand_total:
           type: number
           format: double
+          description: The exact amount that will be charged
           example: 94.98
         currency:
           type: string
           example: "USD"
         merchant_signature:
           type: string
+          description: JWS over the full CartMandate payload
           example: "eyJhbGciOiJFUzI1NiJ9.merchant..."
         issued_at:
           type: string
@@ -1172,9 +1198,8 @@ components:
       required: [mandate_id, session_id, merchant_signature]
       description: |
         The CartMandate as submitted in CompleteCheckoutRequest.
-        Carries the user's counter-signature (or agent auto-sig).
-        Note: no payment credentials here — the payment_handler_id is already
-        inside the signed payload and the merchant retrieves the token server-to-server.
+        Merchant signature is unchanged from CartMandateIssued.
+        User's counter-signature (or agent auto-sig) is added by the agent.
       properties:
         mandate_id:
           type: string
@@ -1182,9 +1207,8 @@ components:
         session_id:
           type: string
           description: |
-            Must match the session_id in the URL path. Verified by the merchant
-            as part of the signature check — this is the cryptographic association
-            between the checkout session and the complete action.
+            Must match the URL session_id. Verified inside the merchant
+            signature — cannot be altered without breaking the signature.
           example: "axcp_sess_a1b2c3d4e5f6g7h8"
         merchant_signature:
           type: string
@@ -1192,11 +1216,11 @@ components:
           example: "eyJhbGciOiJFUzI1NiJ9.merchant..."
         user_counter_signature:
           type: string
-          description: User's JWS counter-signature (human_present mode)
+          description: User's JWS counter-signature (human_present)
           example: "eyJhbGciOiJFUzI1NiJ9.user..."
         agent_auto_signature:
           type: string
-          description: Agent's JWS auto-signature (human_not_present, within IntentMandate bounds)
+          description: Agent JWS auto-sig (human_not_present, within IntentMandate bounds)
           example: "eyJhbGciOiJFUzI1NiJ9.agent..."
         signed_at:
           type: string
@@ -1214,12 +1238,7 @@ components:
           type: string
         cart_mandate_status:
           type: string
-          enum: [preliminary, handler_locked, user_signed, voided]
-          description: |
-            preliminary — issued after CREATE, payment_handler_id not yet set
-            handler_locked — handler selected and locked into mandate
-            user_signed — user counter-signature collected, ready to complete
-            voided — mandate revoked (session cancelled)
+          enum: [pending_user_signature, signed, voided]
         settlement_mandate_id:
           type: string
         settlement_mandate_status:
@@ -1266,9 +1285,9 @@ components:
     SettlementRecord:
       type: object
       description: |
-        Record of PSP settlement. Note: no token value here — the token was
-        exchanged directly between the CP and PSP. Only the PSP's transaction
-        reference is surfaced.
+        PSP settlement record. No token value here — the token was exchanged
+        directly between CP and PSP. Only the PSP's transaction reference is
+        surfaced to the merchant and agent.
       properties:
         settlement_mandate_id:
           type: string
@@ -1279,18 +1298,21 @@ components:
         amount_captured:
           type: number
           format: double
+          example: 94.98
         currency:
           type: string
+          example: "USD"
         payment_network:
           type: string
           example: "VISA"
         network_auth_code:
           type: string
+          example: "AUTH_20260324_XYZ"
         settled_at:
           type: string
           format: date-time
 
-    # ── PRIMITIVES ───────────────────────────────────────────────────────────
+    # ── PRIMITIVES ────────────────────────────────────────────────────────────
 
     PresenceMode:
       type: string
@@ -1299,19 +1321,15 @@ components:
     SessionStatus:
       type: string
       description: |
-        pending_payment_selection — CartMandate issued (preliminary), user picks handler
-        pending_user_signature    — Handler locked in CartMandate, user must counter-sign
-        ready                     — CartMandate fully signed, safe to complete
-        completed                 — Payment settled, order created (terminal)
-        cancelled                 — Terminated before completion (terminal)
-        expired                   — TTL elapsed (terminal)
-      enum:
-        - pending_payment_selection
-        - pending_user_signature
-        - ready
-        - completed
-        - cancelled
-        - expired
+        pending_mandate — CartMandate issued; user reviewing price, selecting
+                          handler client-side, counter-signing. No API call
+                          needed during this phase.
+        ready           — User has counter-signed (agent has the signed mandate).
+                          Safe to call complete.
+        completed       — Payment settled; order created. Terminal.
+        cancelled       — Voided before completion. Terminal.
+        expired         — TTL elapsed. Terminal. Create a new session.
+      enum: [pending_mandate, ready, completed, cancelled, expired]
 
     LineItemInput:
       type: object
@@ -1547,6 +1565,7 @@ components:
           enum: [healthy, degraded, unhealthy]
         version:
           type: string
+          example: "1.3.0"
         timestamp:
           type: string
           format: date-time
