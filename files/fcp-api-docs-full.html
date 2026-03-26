@@ -1,0 +1,2866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCP — HTTP/REST Binding Specification</title>
+<style>
+:root{
+  --bg:#ffffff;--bg2:#f8f9fa;--bg3:#f1f3f5;--bg4:#e9ecef;
+  --border:#dee2e6;--border2:#ced4da;
+  --text:#1a1a2e;--text2:#495057;--text3:#868e96;
+  --accent:#0f4c81;--accent2:#1565c0;--accent-light:#e3f2fd;
+  --green:#2e7d32;--green-bg:#e8f5e9;
+  --amber:#e65100;--amber-bg:#fff3e0;
+  --red:#c62828;--red-bg:#ffebee;
+  --purple:#6a1b9a;--purple-bg:#f3e5f5;
+  --code-bg:#1e1e2e;--code-text:#cdd6f4;
+  --sidebar-w:280px;--header-h:56px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.6;
+  display:flex;flex-direction:column;min-height:100vh}
+
+/* ── TOP BAR ── */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:200;height:var(--header-h);
+  background:var(--accent);color:#fff;
+  display:flex;align-items:center;padding:0 24px;gap:16px;
+  border-bottom:1px solid rgba(0,0,0,.15)}
+.topbar-logo{font-size:18px;font-weight:700;letter-spacing:-.3px;color:#fff;text-decoration:none}
+.topbar-sep{opacity:.4}
+.topbar-title{font-size:14px;opacity:.85}
+.topbar-version{background:rgba(255,255,255,.2);padding:2px 8px;border-radius:12px;
+  font-size:11px;font-weight:600;letter-spacing:.05em}
+.topbar-links{margin-left:auto;display:flex;gap:20px}
+.topbar-links a{color:rgba(255,255,255,.8);text-decoration:none;font-size:13px}
+.topbar-links a:hover{color:#fff}
+
+/* ── LAYOUT ── */
+.layout{display:flex;margin-top:var(--header-h)}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;position:fixed;
+  top:var(--header-h);bottom:0;overflow-y:auto;
+  background:var(--bg2);border-right:1px solid var(--border);
+  padding:16px 0 40px}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2)}
+.nav-section{margin-bottom:4px}
+.nav-section-label{font-size:11px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text3);padding:12px 20px 4px;display:block}
+.nav-link{display:block;padding:5px 20px;font-size:13px;color:var(--text2);
+  text-decoration:none;border-left:2px solid transparent;transition:all .1s}
+.nav-link:hover{background:var(--bg3);color:var(--accent);border-left-color:var(--accent)}
+.nav-link.active{background:var(--accent-light);color:var(--accent);
+  border-left-color:var(--accent);font-weight:500}
+.nav-link.sub{padding-left:32px;font-size:12px}
+.nav-method{display:inline-block;width:46px;font-size:10px;font-weight:700;
+  font-family:'SF Mono',Consolas,monospace;letter-spacing:.03em}
+
+/* ── MAIN ── */
+.main{margin-left:var(--sidebar-w);flex:1;min-width:0}
+.content{max-width:900px;padding:40px 48px 80px}
+
+/* ── HEADINGS ── */
+.section-heading{font-size:1.5rem;font-weight:700;color:var(--text);
+  margin:2rem 0 .75rem;padding-top:.5rem;
+  border-bottom:2px solid var(--border);padding-bottom:.5rem;
+  display:flex;align-items:center;gap:8px}
+.section-heading.h3{font-size:1.15rem;border-bottom:1px solid var(--border);margin:1.5rem 0 .6rem}
+.section-heading.h4{font-size:1rem;border:none;color:var(--text2);margin:1.2rem 0 .5rem}
+.anchor{color:var(--border2);text-decoration:none;font-size:.9em;margin-left:4px}
+.anchor:hover{color:var(--accent)}
+
+p{margin-bottom:.75rem;color:var(--text2);line-height:1.7;font-size:.938rem}
+ul,ol{margin:.5rem 0 .75rem 1.5rem;color:var(--text2);font-size:.938rem}
+li{margin-bottom:.25rem;line-height:1.6}
+strong{color:var(--text)}
+code{font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:.85em;
+  background:var(--bg3);border:1px solid var(--border);
+  padding:1px 5px;border-radius:3px;color:var(--purple)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── RFC KEYWORDS ── */
+.must{color:var(--red);font-variant:small-caps;font-weight:700}
+.should{color:var(--amber);font-variant:small-caps;font-weight:700}
+.may{color:var(--green);font-variant:small-caps;font-weight:700}
+
+/* ── CALLOUTS ── */
+.callout{display:flex;gap:12px;padding:14px 16px;border-radius:6px;
+  margin:1rem 0;font-size:.9rem;line-height:1.6}
+.callout-info{background:var(--accent-light);border-left:4px solid var(--accent)}
+.callout-warn{background:var(--amber-bg);border-left:4px solid var(--amber)}
+.callout-tip{background:var(--green-bg);border-left:4px solid var(--green)}
+.callout-danger{background:var(--red-bg);border-left:4px solid var(--red)}
+.callout-icon{font-size:1.1em;flex-shrink:0;margin-top:1px}
+
+/* ── OPERATION BADGE ── */
+.op-header{display:flex;align-items:center;gap:14px;padding:14px 18px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px 8px 0 0;
+  margin-top:1.5rem}
+.op-method{font-family:'SF Mono',Consolas,monospace;font-size:12px;font-weight:700;
+  padding:4px 10px;border-radius:4px;letter-spacing:.05em;flex-shrink:0}
+.method-GET{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
+.method-POST{background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9}
+.method-PATCH{background:#fff8e1;color:#e65100;border:1px solid #ffcc80}
+.method-DELETE{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
+.op-path{font-family:'SF Mono',Consolas,monospace;font-size:14px;font-weight:600;color:var(--text)}
+.op-summary{font-size:13px;color:var(--text3);margin-left:4px}
+.op-block{border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;margin-bottom:2rem}
+.op-body{padding:20px 24px}
+
+/* ── TABLES ── */
+.field-table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.5rem 0 1rem}
+.field-table th{background:var(--bg3);text-align:left;padding:8px 12px;
+  font-size:.75rem;font-weight:600;color:var(--text3);letter-spacing:.05em;
+  text-transform:uppercase;border-bottom:2px solid var(--border)}
+.field-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+.field-table tr:last-child td{border-bottom:none}
+.field-table tr:hover td{background:var(--bg2)}
+.fn{white-space:nowrap}
+.fn code{color:var(--accent);background:var(--accent-light);border-color:#90caf9;font-size:.82em}
+.ft{white-space:nowrap}
+.fd{color:var(--text2);line-height:1.6;font-size:.875rem}
+.type-tag{font-family:'SF Mono',Consolas,monospace;font-size:.78em;font-weight:600;
+  background:var(--purple-bg);color:var(--purple);border:1px solid #ce93d8;
+  padding:1px 6px;border-radius:3px}
+.badge-req{font-size:.68em;font-weight:600;color:var(--red);background:var(--red-bg);
+  border:1px solid #ef9a9a;padding:1px 5px;border-radius:3px;margin-left:5px;
+  vertical-align:middle;font-family:monospace;letter-spacing:.03em;text-transform:uppercase}
+.badge-opt{font-size:.68em;color:var(--text3);padding:1px 5px;margin-left:5px;vertical-align:middle}
+.badge-fmt{font-size:.72em;color:var(--text3);background:var(--bg3);
+  border:1px solid var(--border2);padding:1px 5px;border-radius:3px;margin-left:4px}
+.badge-null{font-size:.72em;color:var(--amber);background:var(--amber-bg);
+  border:1px solid #ffcc80;padding:1px 5px;border-radius:3px;margin-left:4px}
+.enum-vals{margin-top:5px;display:flex;flex-wrap:wrap;gap:4px}
+.ev{font-family:monospace;font-size:.78em;background:var(--amber-bg);
+  color:var(--amber);border:1px solid #ffcc80;padding:1px 5px;border-radius:3px}
+.constraints{font-size:.78em;color:var(--text3);margin-top:4px}
+.field-ex{font-size:.78em;color:var(--green);margin-top:3px}
+.schema-note{font-size:.83rem;color:var(--text3);margin-bottom:.4rem}
+.no-fields{color:var(--text3);font-style:italic;font-size:.9rem;padding:.5rem 0}
+
+/* ── TABS ── */
+.tabs{margin:.75rem 0 1rem}
+.tab-bar{display:flex;border-bottom:2px solid var(--border);gap:0}
+.tab-btn{padding:7px 16px;font-size:13px;cursor:pointer;border:none;background:none;
+  color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:all .15s;font-family:inherit}
+.tab-btn:hover{color:var(--accent)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.tab-content{background:var(--code-bg);border-radius:0 6px 6px 6px;overflow:hidden}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ── CODE ── */
+pre.code{margin:0;overflow-x:auto}
+pre.code code{display:block;padding:18px 20px;font-family:'SF Mono',Consolas,monospace;
+  font-size:12.5px;line-height:1.7;color:var(--code-text);white-space:pre}
+pre.code code.http{color:#a6e3a1}
+.http-comment{padding:8px 20px 0;font-size:12px;color:#585b70;font-family:monospace}
+
+/* ── STATUS BADGE TABLE ── */
+.status-table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.5rem 0 1rem}
+.status-table th{background:var(--bg3);text-align:left;padding:8px 12px;
+  font-size:.75rem;font-weight:600;color:var(--text3);letter-spacing:.05em;
+  text-transform:uppercase;border-bottom:2px solid var(--border)}
+.status-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text2)}
+.status-table tr:last-child td{border-bottom:none}
+.sc{font-family:monospace;font-size:.82em;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid}
+.sc-2{color:#2e7d32;background:#e8f5e9;border-color:#a5d6a7}
+.sc-4{color:#c62828;background:#ffebee;border-color:#ef9a9a}
+.sc-5{color:#e65100;background:#fff3e0;border-color:#ffcc80}
+
+/* ── HEADER TABLE ── */
+.header-table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.5rem 0}
+.header-table th{background:var(--bg3);text-align:left;padding:8px 12px;
+  font-size:.75rem;font-weight:600;color:var(--text3);letter-spacing:.05em;
+  text-transform:uppercase;border-bottom:2px solid var(--border)}
+.header-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text2)}
+.header-table tr:last-child td{border-bottom:none}
+.req-y{font-weight:700;color:var(--red)}
+.req-n{color:var(--text3)}
+.req-c{font-style:italic;color:var(--amber)}
+
+/* ── FLOW DIAGRAM ── */
+.flow-diagram{background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:20px 24px;margin:1rem 0;overflow-x:auto}
+.flow-row{display:flex;align-items:center;flex-wrap:wrap;gap:0;margin-bottom:8px}
+.flow-step{background:#fff;border:1.5px solid var(--border2);border-radius:5px;
+  padding:5px 12px;font-size:12.5px;font-family:monospace;color:var(--text);white-space:nowrap}
+.flow-step.terminal{color:var(--text3);border-style:dashed}
+.flow-step.success{border-color:#a5d6a7;background:#e8f5e9;color:#2e7d32}
+.flow-step.error{border-color:#ef9a9a;background:#ffebee;color:#c62828}
+.flow-step.active{border-color:#90caf9;background:var(--accent-light);color:var(--accent)}
+.flow-arrow{color:var(--text3);padding:0 8px;font-size:14px}
+.flow-label{font-size:11px;color:var(--text3);margin-left:4px}
+
+/* ── MISC ── */
+hr{border:none;border-top:1px solid var(--border);margin:2rem 0}
+.subtitle{font-size:1rem;color:var(--text3);margin-bottom:1.5rem}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="#overview" class="topbar-logo">FCP</a>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">HTTP/REST Binding</span>
+  <span class="topbar-version">v1.0.0</span>
+  <div class="topbar-links">
+    <a href="#protocol-mechanics">Mechanics</a>
+    <a href="#security">Security</a>
+    <a href="#schema-reference">Schemas</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+<div class="nav-section">
+  <a href="#overview" class="nav-link">Overview</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Protocol Fundamentals</span>
+  <a href="#base-url" class="nav-link sub">Base URL</a>
+  <a href="#content-types" class="nav-link sub">Content Types</a>
+  <a href="#transport-security" class="nav-link sub">Transport Security</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Authentication</span>
+  <a href="#auth-overview" class="nav-link sub">Overview</a>
+  <a href="#auth-oauth" class="nav-link sub">OAuth 2.0</a>
+  <a href="#auth-mandate" class="nav-link sub">Mandate Chain Auth</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Operations</span>
+  <a href="#op-discover" class="nav-link"><span class="nav-method" style="color:#2e7d32">GET</span>Discover</a>
+  <a href="#op-create" class="nav-link"><span class="nav-method" style="color:#0d47a1">POST</span>Create</a>
+  <a href="#op-get" class="nav-link"><span class="nav-method" style="color:#2e7d32">GET</span>Get</a>
+  <a href="#op-update" class="nav-link"><span class="nav-method" style="color:#e65100">PATCH</span>Update</a>
+  <a href="#op-cancel" class="nav-link"><span class="nav-method" style="color:#0d47a1">POST</span>Cancel</a>
+  <a href="#op-complete" class="nav-link"><span class="nav-method" style="color:#0d47a1">POST</span>Complete</a>
+  <a href="#op-verify" class="nav-link"><span class="nav-method" style="color:#0d47a1">POST</span>Verify Mandate</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">HTTP Headers</span>
+  <a href="#headers-request" class="nav-link sub">Request Headers</a>
+  <a href="#headers-client-context" class="nav-link sub">FCP-Client-Context</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Protocol Mechanics</span>
+  <a href="#status-codes" class="nav-link sub">Status Codes</a>
+  <a href="#error-responses" class="nav-link sub">Error Responses</a>
+  <a href="#idempotency" class="nav-link sub">Idempotency</a>
+  <a href="#session-lifecycle" class="nav-link sub">Session Lifecycle</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Security</span>
+  <a href="#mandate-chain" class="nav-link sub">Mandate Chain</a>
+  <a href="#intent-mandate" class="nav-link sub">IntentMandate</a>
+  <a href="#cart-mandate" class="nav-link sub">CartMandate</a>
+  <a href="#settlement-mandate" class="nav-link sub">SettlementMandate</a>
+  <a href="#client-context-security" class="nav-link sub">client_context &amp; Risk</a>
+  <a href="#payment-token-flow" class="nav-link sub">Payment Token Flow</a>
+</div>
+<div class="nav-section">
+  <span class="nav-section-label">Schema Reference</span>
+  <a href="#schema-ClientContext" class="nav-link sub">ClientContext</a>
+  <a href="#schema-LocationContext" class="nav-link sub">LocationContext</a>
+  <a href="#schema-DeviceContext" class="nav-link sub">DeviceContext</a>
+  <a href="#schema-RiskContext" class="nav-link sub">RiskContext</a>
+  <a href="#schema-IntentMandate" class="nav-link sub">IntentMandate</a>
+  <a href="#schema-CartMandateIssued" class="nav-link sub">CartMandateIssued</a>
+  <a href="#schema-CartMandateSigned" class="nav-link sub">CartMandateSigned</a>
+  <a href="#schema-DiscountInput" class="nav-link sub">DiscountInput</a>
+  <a href="#schema-AppliedDiscount" class="nav-link sub">AppliedDiscount</a>
+  <a href="#schema-LoyaltyCheckoutInput" class="nav-link sub">LoyaltyCheckoutInput</a>
+  <a href="#schema-CheckoutSession" class="nav-link sub">CheckoutSession</a>
+  <a href="#schema-CompleteResponse" class="nav-link sub">CompleteResponse</a>
+</div>
+</nav>
+  <main class="main">
+    <div class="content">
+<!-- ── OVERVIEW ── -->
+<h1 id="overview" style="font-size:2rem;font-weight:800;margin-bottom:.5rem;color:var(--text)">
+  FCP — Federated Commerce Protocol
+</h1>
+<p class="subtitle">HTTP/REST Binding Specification · Version 1.0.0</p>
+<p>This document specifies the HTTP/REST binding for the FCP Checkout capability. It defines
+the wire format, authentication mechanisms, headers, error handling, and the complete
+mandate-chain security model for all checkout operations.</p>
+
+<div class="callout callout-info"><span class="callout-icon">ℹ</span><div>FCP uses a <strong>two-phase checkout design</strong>. Phase 1 (<code>POST /v1/checkouts</code>) submits cart intent. Phase 2 (<code>POST /v1/checkouts/&lt;id&gt;/complete</code>) authorises and fires payment. The CartMandate is the cryptographic bridge between the two phases.</div></div>
+
+<h2 id="operations" class="section-heading">Operations<a class="anchor" href="#operations">¶</a></h2>
+<table class="status-table">
+  <thead><tr><th>Operation</th><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#op-discover">Discover</a></td><td><code>GET</code></td><td><code>/.well-known/fcp</code></td><td>Fetch merchant capability profile, payment handlers, and loyalty programme</td></tr>
+    <tr><td><a href="#op-create">Create Checkout</a></td><td><code>POST</code></td><td><code>/v1/checkouts</code></td><td>Open a new checkout session with cart intent</td></tr>
+    <tr><td><a href="#op-get">Get Checkout</a></td><td><code>GET</code></td><td><code>/v1/checkouts/{session_id}</code></td><td>Retrieve current session state and CartMandate</td></tr>
+    <tr><td><a href="#op-update">Update Checkout</a></td><td><code>PATCH</code></td><td><code>/v1/checkouts/{session_id}</code></td><td>Modify cart, discounts, loyalty, or buyer details</td></tr>
+    <tr><td><a href="#op-cancel">Cancel Checkout</a></td><td><code>POST</code></td><td><code>/v1/checkouts/{session_id}/cancel</code></td><td>Terminate session, void mandate, notify CP</td></tr>
+    <tr><td><a href="#op-complete">Complete Checkout</a></td><td><code>POST</code></td><td><code>/v1/checkouts/{session_id}/complete</code></td><td>Submit signed CartMandate and authorise payment</td></tr>
+    <tr><td><a href="#op-verify">Verify Mandate</a></td><td><code>POST</code></td><td><code>/v1/mandates/verify</code></td><td>Cryptographically verify a mandate chain (audit/dispute)</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- ── PROTOCOL FUNDAMENTALS ── -->
+<h2 id="protocol-fundamentals" class="section-heading">Protocol Fundamentals<a class="anchor" href="#protocol-fundamentals">¶</a></h2>
+
+<h3 id="base-url" class="section-heading h3">Base URL<a class="anchor" href="#base-url">¶</a></h3>
+<p>All FCP REST endpoints are relative to the merchant's base URL, which is
+discovered through the FCP profile at <code>/.well-known/fcp</code>.
+The exact endpoint for each capability is defined in the <code>capabilities[].endpoint</code>
+field of the merchant profile returned by the discovery operation.</p>
+<p>Agents <strong class="must">MUST</strong> fetch the merchant profile before initiating any session. The
+profile is cacheable — agents <strong class="should">SHOULD</strong> respect the Cache-Control response header.
+The default cache TTL is 5 minutes if no Cache-Control header is present.</p>
+
+<h3 id="content-types" class="section-heading h3">Content Types<a class="anchor" href="#content-types">¶</a></h3>
+<ul>
+  <li><strong>Request:</strong> <code>application/json</code></li>
+  <li><strong>Response:</strong> <code>application/json</code></li>
+</ul>
+<p>All request and response bodies <strong class="must">MUST</strong> be valid JSON as specified in RFC 8259.
+Empty bodies (e.g. for optional request bodies) <strong class="may">MAY</strong> be omitted entirely or sent as <code>{{}}</code>.
+
+<h3 id="transport-security" class="section-heading h3">Transport Security<a class="anchor" href="#transport-security">¶</a></h3>
+<p>All FCP REST endpoints <strong class="must">MUST</strong> be served over HTTPS with a minimum TLS version of 1.2.
+TLS 1.3 is strongly recommended. Agents <strong class="must">MUST</strong> reject connections with self-signed certificates in production environments.
+All requests <strong class="must">MUST</strong> be made directly to the merchant's FCP endpoint discovered from the profile — intermediary proxies that can inspect or modify the payload are not permitted.</p>
+
+<hr>
+
+<!-- ── AUTHENTICATION ── -->
+<h2 id="auth-overview" class="section-heading">Authentication<a class="anchor" href="#auth-overview">¶</a></h2>
+<p>FCP uses two complementary authentication mechanisms that operate at different levels of the stack:</p>
+<ol>
+  <li><strong>OAuth 2.0</strong> — transport-level authentication. Identifies the agent to the merchant.</li>
+  <li><strong>Mandate Chain</strong> — payload-level authentication. Cryptographically proves the user authorised the transaction.</li>
+</ol>
+<p>Both are required for <code>complete</code>. OAuth alone is sufficient for <code>get</code> and <code>update</code>.</p>
+
+<h3 id="auth-oauth" class="section-heading h3">OAuth 2.0<a class="anchor" href="#auth-oauth">¶</a></h3>
+<p>FCP uses OAuth 2.0 bearer tokens as defined in
+<a href="https://tools.ietf.org/html/rfc6749" target="_blank">RFC 6749</a>.
+All requests (except <code>GET /.well-known/fcp</code>) <strong class="must">MUST</strong> include a valid bearer token in the Authorization header.
+Two grant types are supported:</p>
+
+<table class="field-table">
+  <thead><tr><th>Grant Type</th><th>Use Case</th><th>Scopes</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>client_credentials</code></td>
+      <td>Autonomous agent acting without a live user session (human_not_present mode)</td>
+      <td><code>fcp.checkout</code></td>
+    </tr>
+    <tr>
+      <td><code>authorization_code</code></td>
+      <td>Agent acting with an active user session (human_present mode)</td>
+      <td><code>fcp.checkout</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-warn"><span class="callout-icon">⚠</span><div>OAuth tokens do not prove <em>user intent</em> — they only prove the agent is registered. User intent is proven by the <strong>IntentMandate</strong> and <strong>CartMandate</strong> signatures. Do not rely on OAuth alone as evidence of user authorisation for payment.</div></div>
+
+<h3 id="auth-mandate" class="section-heading h3">Mandate Chain Authentication<a class="anchor" href="#auth-mandate">¶</a></h3>
+<p>The mandate chain proves, cryptographically, that a specific user authorised a specific agent
+to spend a specific amount at a specific merchant. It is submitted as part of the request
+payload — not as a header — so that it becomes part of the signed message body.</p>
+<p>For <code>create</code>, the agent submits an <strong>IntentMandate</strong> signed by the user.
+For <code>complete</code>, the agent submits a <strong>CartMandateSigned</strong> — the
+merchant-issued CartMandate counter-signed by the user. See the
+<a href="#mandate-chain">Mandate Chain</a> section for the full specification.</p>
+
+<hr>
+
+<!-- ── OPERATIONS ── -->
+<h2 id="operations-detail" class="section-heading">Operations<a class="anchor" href="#operations-detail">¶</a></h2>
+
+<!-- DISCOVER -->
+<h3 id="op-discover" class="section-heading h3">Discover — GET /.well-known/fcp<a class="anchor" href="#op-discover">¶</a></h3>
+<p>Retrieves the merchant's capability profile. This is always the first call an agent makes. The profile declares
+supported capabilities, available payment handlers (with their public keys for credential encryption),
+the loyalty programme configuration, and the merchant's DID trust anchor for mandate signature verification.</p>
+<p>Agents <strong class="must">MUST</strong> re-fetch the profile if it has expired per Cache-Control.
+Agents <strong class="should">SHOULD</strong> not hard-code payment handler IDs — they must be read from the profile at runtime.</p>
+<div class="op-header">
+  <span class="op-method method-GET">GET</span>
+  <code class="op-path">/.well-known/fcp</code>
+  <span class="op-summary">Fetch merchant capability profile</span>
+</div>
+<div class="op-block"><div class="op-body"><p><strong>No request body or authentication required.</strong> This endpoint is public.</p><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_1')">Response</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">GET /.well-known/fcp HTTP/1.1
+FCP-Agent: profile="https://my-agent.example/.well-known/fcp"
+FCP-Version: 1.0</code></pre></div><div class="tab-pane " id="tab_response_1"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "fcp_version": "1.0",
+  "merchant_id": "merch_abc123",
+  "display_name": "Acme Electronics",
+  "profile_uri": "https://acme.example/.well-known/fcp",
+  "capabilities": [
+    {
+      "name": "fcp.checkout",
+      "version": "1.0",
+      "endpoint": "/v1/checkouts",
+      "supported_modes": [
+        "human_present",
+        "human_not_present"
+      ]
+    },
+    {
+      "name": "fcp.loyalty",
+      "version": "1.0",
+      "endpoint": "/v1/loyalty"
+    }
+  ],
+  "payment_handlers": [
+    {
+      "id": "handler_google_pay",
+      "name": "Google Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/gpay.svg"
+    },
+    {
+      "id": "handler_apple_pay",
+      "name": "Apple Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/apay.svg"
+    },
+    {
+      "id": "handler_stripe_card",
+      "name": "Credit / Debit Card",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/card.svg"
+    }
+  ],
+  "loyalty_program": {
+    "program_id": "acme_rewards",
+    "program_name": "Acme Rewards",
+    "currency_name": "Points",
+    "earn_rate": 10,
+    "earn_rate_description": "10 points per $1 spent",
+    "redemption_rate": 0.01,
+    "min_redemption_points": 500
+  },
+  "discount_policy": {
+    "max_discounts_per_order": 3,
+    "stackable_types": [
+      "PROMO_CODE",
+      "LOYALTY_REDEMPTION",
+      "AUTOMATIC"
+    ],
+    "non_stackable_types": [
+      "BUNDLE"
+    ]
+  },
+  "trust_anchor": {
+    "did": "did:web:acme.example",
+    "signing_key_jwk": {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8T...",
+      "y": "x_FEzRu9m36HLN_tue659LNpXW6pCySt..."
+    }
+  }
+}</code></pre></div></div></div></div></div>
+
+<h4 id="discover-fields" class="section-heading h4">MerchantProfile fields<a class="anchor" href="#discover-fields">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>fcp_version</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>1.3</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>merch_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>display_name</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>Acme Electronics</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>profile_uri</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">uri</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>capabilities</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">array<CapabilityDeclaration></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>payment_handlers</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">array<PaymentHandler></span></td>
+          <td class="fd">Available payment handlers. The agent presents this list to the user
+after the CartMandate is issued (price is now known) and the user
+selects one. The selected `id` is submitted in CompleteCheckoutRequest.
+No separate API call needed for selection.
+</td>
+        </tr><tr>
+          <td class="fn"><code>extensions</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<string></span></td>
+          <td class="fd"><div class="field-ex">Example: <code>['fcp.ext.loyalty', 'fcp.ext.subscriptions']</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>trust_anchor</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">TrustAnchor</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discount_policy</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">DiscountPolicy</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_program</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">LoyaltyProgram</span></td>
+          <td class="fd">Present when fcp.loyalty capability is declared.</td>
+        </tr></tbody>
+    </table>
+
+<!-- CREATE CHECKOUT -->
+<h3 id="op-create" class="section-heading h3">Create Checkout — POST /v1/checkouts<a class="anchor" href="#op-create">¶</a></h3>
+<p><strong>Phase 1.</strong> Submits cart intent to open a new checkout session. This request contains
+everything about <em>what</em> the user wants to buy — items, buyer details, discounts, loyalty
+redemption, and the signed IntentMandate authorising the agent to act. It does <strong>not</strong>
+contain any payment information.</p>
+<p>Upon receiving a valid create request, the merchant:</p>
+<ol>
+  <li>Validates all line items against current inventory</li>
+  <li>Computes subtotal, shipping, tax, and any applicable discounts (including loyalty redemption)</li>
+  <li>Scores the request using <code>client_context.risk</code> signals and records the device fingerprint</li>
+  <li>Issues a <strong>CartMandate</strong> — a merchant-signed document containing the session_id, exact items, and locked <code>grand_total</code></li>
+  <li>Returns the session with status <code>pending_mandate</code></li>
+</ol>
+<p>The <code>FCP-Idempotency-Key</code> header is <strong class="must">MUST</strong> be included on this request.
+Retrying with the same key returns the existing session without creating a duplicate.</p>
+
+<div class="op-header">
+  <span class="op-method method-POST">POST</span>
+  <code class="op-path">/v1/checkouts</code>
+  <span class="op-summary">Create a checkout session</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_201_1')">Response 201</button><button class="tab-btn " onclick="switchTab(this,'tab_response_422_2')">Response 422</button><button class="tab-btn " onclick="switchTab(this,'tab_response_451_3')">Response 451</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">POST /v1/checkouts HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "mode": "human_present",
+  "line_items": [
+    {
+      "catalog_id": "item_headphones_pro",
+      "quantity": 1
+    },
+    {
+      "catalog_id": "item_usbc_cable",
+      "quantity": 2
+    }
+  ],
+  "buyer": {
+    "email": "jane@example.com",
+    "shipping_address": {
+      "name": "Jane Doe",
+      "line1": "123 Main St",
+      "city": "Atlanta",
+      "state": "GA",
+      "postal_code": "30301",
+      "country": "US"
+    }
+  },
+  "discounts": [
+    {
+      "type": "PROMO_CODE",
+      "code": "SUMMER15"
+    }
+  ],
+  "loyalty": {
+    "account_id": "loyalty_jane_001",
+    "redeem_points": 1000
+  },
+  "intent_mandate": {
+    "mandate_id": "im_001",
+    "signed_by": "did:key:zAgent123",
+    "constraints": {
+      "max_amount": 300.0,
+      "currency": "USD",
+      "expires_at": "2026-03-24T11:00:00Z"
+    },
+    "signature": "eyJhbGciOiJFUzI1NiJ9..."
+  },
+  "client_context": {
+    "location": {
+      "latitude": 33.749,
+      "longitude": -84.388,
+      "country": "US",
+      "region": "GA",
+      "city": "Atlanta",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.42",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "os": "iOS",
+      "os_version": "18.2",
+      "app_version": "4.1.0",
+      "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+      "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+      "is_emulator": false,
+      "is_rooted": false,
+      "screen_resolution": "390x844",
+      "language": "en-US",
+      "timezone": "America/New_York"
+    },
+    "risk": {
+      "session_age_seconds": 142,
+      "is_new_device": false,
+      "previous_orders_count": 7,
+      "account_age_days": 412,
+      "velocity_last_1h": 1,
+      "velocity_last_24h": 2,
+      "risk_score": 12,
+      "risk_signals": []
+    }
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_201_1"><pre class="code"><code class="http">HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+  "status": "pending_mandate",
+  "mode": "human_present",
+  "merchant_id": "merch_abc123",
+  "line_items": [
+    {
+      "line_item_id": "li_001",
+      "catalog_id": "item_headphones_pro",
+      "title": "Wireless Headphones Pro",
+      "quantity": 1,
+      "unit_price": 79.99,
+      "line_total": 79.99,
+      "in_stock": true
+    },
+    {
+      "line_item_id": "li_002",
+      "catalog_id": "item_usbc_cable",
+      "title": "USB-C Cable",
+      "quantity": 2,
+      "unit_price": 12.99,
+      "line_total": 25.98,
+      "in_stock": true
+    }
+  ],
+  "totals": {
+    "subtotal": 105.97,
+    "discount_total": 25.9,
+    "loyalty_discount": 10.0,
+    "tax_total": 6.91,
+    "shipping_total": 7.0,
+    "grand_total": 83.98,
+    "currency": "USD"
+  },
+  "discounts_applied": [
+    {
+      "discount_id": "disc_001",
+      "type": "PROMO_CODE",
+      "code": "SUMMER15",
+      "description": "Summer Sale \u2014 15% off",
+      "applies_to": "order",
+      "value_type": "percentage",
+      "value": 15,
+      "amount_saved": 15.9,
+      "stackable": true
+    },
+    {
+      "discount_id": "disc_002",
+      "type": "LOYALTY_REDEMPTION",
+      "description": "Loyalty points redemption (1000 pts)",
+      "applies_to": "order",
+      "value_type": "fixed_amount",
+      "value": 10.0,
+      "amount_saved": 10.0,
+      "loyalty_points_redeemed": 1000,
+      "stackable": true
+    }
+  ],
+  "loyalty_session": {
+    "account_id": "loyalty_jane_001",
+    "points_balance": 3500,
+    "points_redeemed": 1000,
+    "redemption_value_usd": 10.0,
+    "projected_earn": 840
+  },
+  "cart_mandate": {
+    "mandate_id": "cm_001",
+    "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+    "intent_mandate_id": "im_001",
+    "merchant_id": "merch_abc123",
+    "grand_total": 83.98,
+    "currency": "USD",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "issued_at": "2026-03-24T09:30:00Z",
+    "expires_at": "2026-03-24T09:45:00Z"
+  },
+  "available_payment_handlers": [
+    {
+      "id": "handler_google_pay",
+      "name": "Google Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/gpay.svg"
+    },
+    {
+      "id": "handler_apple_pay",
+      "name": "Apple Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/apay.svg"
+    }
+  ],
+  "risk_decision": {
+    "action": "allow",
+    "sca_required": false,
+    "reason": "Low risk; known device"
+  },
+  "mandate_chain": {
+    "intent_mandate_id": "im_001",
+    "intent_mandate_status": "valid",
+    "cart_mandate_id": "cm_001",
+    "cart_mandate_status": "pending_user_signature",
+    "settlement_mandate_id": null,
+    "settlement_mandate_status": "not_issued"
+  },
+  "available_actions": [
+    "update",
+    "cancel"
+  ],
+  "created_at": "2026-03-24T09:30:00Z",
+  "updated_at": "2026-03-24T09:30:00Z",
+  "expires_at": "2026-03-24T09:45:00Z"
+}</code></pre></div><div class="tab-pane " id="tab_response_422_2"><pre class="code"><code class="http">HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "mandate_constraint_violated",
+    "message": "Intent mandate expired at 2026-03-24T11:00:00Z. Current time is 2026-03-24T11:02:00Z.",
+    "field": "intent_mandate.constraints.expires_at",
+    "request_id": "req_fcp_abc123"
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_451_3"><pre class="code"><code class="http">HTTP/1.1 451 Unavailable For Legal Reasons
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "geo_restricted",
+    "message": "Merchant cannot sell or ship to the location in client_context: IR (Iran). This location is subject to trade restrictions.",
+    "field": "client_context.location.country",
+    "request_id": "req_fcp_xyz789"
+  }
+}</code></pre></div></div></div></div></div>
+
+<h4 id="create-request-fields" class="section-heading h4">CreateCheckoutRequest fields<a class="anchor" href="#create-request-fields">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mode</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">CheckoutMode</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>line_items</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">array<LineItemInput></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>buyer</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">Buyer</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<DiscountInput></span></td>
+          <td class="fd">Discounts to attempt to apply at session creation.</td>
+        </tr><tr>
+          <td class="fn"><code>intent_mandate</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">IntentMandate</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>metadata</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>client_context</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">ClientContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">LoyaltyCheckoutInput</span></td>
+          <td class="fd">Loyalty redemption for this checkout. Optional.</td>
+        </tr></tbody>
+    </table>
+
+<h4 id="create-mode" class="section-heading h4">mode — CheckoutMode<a class="anchor" href="#create-mode">¶</a></h4>
+<p>Determines how the CartMandate will be signed and the session TTL.</p>
+<table class="field-table">
+  <thead><tr><th>Value</th><th>Description</th><th>CartMandate signing</th><th>Session TTL</th></tr></thead>
+  <tbody>
+    <tr><td><code>human_present</code></td><td>User is actively engaged with the checkout flow</td><td>User counter-signs via biometric/PIN on their device</td><td>15 minutes</td></tr>
+    <tr><td><code>human_not_present</code></td><td>Agent acts autonomously under a pre-signed IntentMandate</td><td>Agent auto-signs if cart is within IntentMandate constraints</td><td>24 hours</td></tr>
+  </tbody>
+</table>
+
+<h4 id="create-discounts" class="section-heading h4">discounts — array&lt;DiscountInput&gt;<a class="anchor" href="#create-discounts">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>type</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">PROMO_CODE: user-entered code — requires code field
+AUTOMATIC: merchant rule — no input needed
+LOYALTY_REDEMPTION: points redemption — requires loyalty.redeem_points
+AGENT_OFFER: personalised offer — requires offer_id
+BUNDLE: bundle pricing — merchant applies automatically<div class="enum-vals"><code class="ev">PROMO_CODE</code> <code class="ev">AUTOMATIC</code> <code class="ev">LOYALTY_REDEMPTION</code> <code class="ev">AGENT_OFFER</code> <code class="ev">BUNDLE</code></div><div class="field-ex">Example: <code>PROMO_CODE</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Required for PROMO_CODE.<div class="field-ex">Example: <code>SUMMER15</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>offer_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Required for AGENT_OFFER.<div class="field-ex">Example: <code>offer_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_points</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Points being redeemed — informational for LOYALTY_REDEMPTION.<div class="field-ex">Example: <code>1000</code></div></td>
+        </tr></tbody>
+    </table>
+<div class="callout callout-warn"><span class="callout-icon">⚠</span><div>Rejected discounts (invalid code, expired, non-stackable) are returned in <code>CheckoutSession.discounts_rejected</code> — the session is still created successfully. The agent should surface the rejection to the user without aborting the flow.</div></div>
+
+<h4 id="create-loyalty" class="section-heading h4">loyalty — LoyaltyCheckoutInput<a class="anchor" href="#create-loyalty">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>account_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Loyalty account to attach to this session.<div class="field-ex">Example: <code>loyalty_jane_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>redeem_points</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Points to redeem. Must be >= min_redemption_points. Converted to a LOYALTY_REDEMPTION discount entry.<div class="constraints">min: 0</div><div class="field-ex">Example: <code>1000</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h4 id="create-intent-mandate" class="section-heading h4">intent_mandate — IntentMandate<a class="anchor" href="#create-intent-mandate">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>im_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_by</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">DID of the signing key<div class="field-ex">Example: <code>did:key:zAgent123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>constraints</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>issued_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h4 id="create-client-context" class="section-heading h4">client_context — ClientContext<a class="anchor" href="#create-client-context">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>location</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">LocationContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>device</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">DeviceContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>risk</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">RiskContext</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+<p>See the <a href="#client-context-security">client_context &amp; Risk Scoring</a> section for the full field reference and security semantics.</p>
+
+<h4 id="create-response-fields" class="section-heading h4">CheckoutSession response fields<a class="anchor" href="#create-response-fields">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>status</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">SessionStatus</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>mode</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">CheckoutMode</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>merch_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>line_items</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<LineItemResolved></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>buyer</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">Buyer</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>totals</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">Totals</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_applied</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>cart_mandate</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">CartMandateIssued</span></td>
+          <td class="fd">Current merchant-signed CartMandate. Contains grand_total and
+session_id inside the signed payload. The agent presents this to
+the user for review and counter-signature before calling complete.
+</td>
+        </tr><tr>
+          <td class="fn"><code>cart_mandate_invalidated</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">True when a previous CartMandate was voided by this update.
+Agent must re-collect the user's counter-signature.
+<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>available_payment_handlers</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<PaymentHandlerSummary></span></td>
+          <td class="fd">Handlers available for this session. Present these to the user
+after showing the CartMandate (so they know the final price before
+selecting a payment method). The selected handler's `id` goes into
+CompleteCheckoutRequest.payment_handler_id.
+</td>
+        </tr><tr>
+          <td class="fn"><code>mandate_chain</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">MandateChainSummary</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>available_actions</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<string></span></td>
+          <td class="fd">Actions the agent may take from this state<div class="field-ex">Example: <code>['update', 'cancel', 'complete']</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>metadata</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>created_at</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>updated_at</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>expires_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd">15 min for human_present; 24 hr for human_not_present</td>
+        </tr><tr>
+          <td class="fn"><code>discounts_rejected</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<object></span></td>
+          <td class="fd">Discounts submitted but not applied (invalid code, expired, non-stackable). Session still created.</td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_session</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd">Loyalty state for this session (present when loyalty account attached).</td>
+        </tr><tr>
+          <td class="fn"><code>risk_decision</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd">Merchant's risk assessment of this session (informational).</td>
+        </tr></tbody>
+    </table>
+
+<!-- GET CHECKOUT -->
+<h3 id="op-get" class="section-heading h3">Get Checkout — GET /v1/checkouts/{session_id}<a class="anchor" href="#op-get">¶</a></h3>
+<p>Returns the current state of a checkout session. Agents <strong class="should">SHOULD</strong> call GET immediately before calling complete
+to confirm the CartMandate has not been invalidated by a merchant-side change (inventory drop, pricing update).</p>
+<p>The response always includes the current CartMandate and <code>available_payment_handlers</code>,
+allowing the agent to render the payment selection UI without re-fetching the merchant profile.</p>
+<p>The <code>client_context</code> is submitted via the <code>FCP-Client-Context</code> header
+as base64url-encoded JSON on GET requests (since GET has no request body).</p>
+
+<div class="op-header">
+  <span class="op-method method-GET">GET</span>
+  <code class="op-path">/v1/checkouts/{{session_id}}</code>
+  <span class="op-summary">Retrieve checkout session</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_1')">Response 200</button><button class="tab-btn " onclick="switchTab(this,'tab_response_404_2')">Response 404</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">GET /v1/checkouts/fcp_sess_a1b2c3d4e5f6g7h8 HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Client-Context: eyJsb2NhdGlvbiI6eyJjb3VudHJ5IjoiVVMifX0=</code></pre></div><div class="tab-pane " id="tab_response_200_1"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+  "status": "pending_mandate",
+  "mode": "human_present",
+  "merchant_id": "merch_abc123",
+  "line_items": [
+    {
+      "line_item_id": "li_001",
+      "catalog_id": "item_headphones_pro",
+      "title": "Wireless Headphones Pro",
+      "quantity": 1,
+      "unit_price": 79.99,
+      "line_total": 79.99,
+      "in_stock": true
+    },
+    {
+      "line_item_id": "li_002",
+      "catalog_id": "item_usbc_cable",
+      "title": "USB-C Cable",
+      "quantity": 2,
+      "unit_price": 12.99,
+      "line_total": 25.98,
+      "in_stock": true
+    }
+  ],
+  "totals": {
+    "subtotal": 105.97,
+    "discount_total": 25.9,
+    "loyalty_discount": 10.0,
+    "tax_total": 6.91,
+    "shipping_total": 7.0,
+    "grand_total": 83.98,
+    "currency": "USD"
+  },
+  "discounts_applied": [
+    {
+      "discount_id": "disc_001",
+      "type": "PROMO_CODE",
+      "code": "SUMMER15",
+      "description": "Summer Sale \u2014 15% off",
+      "applies_to": "order",
+      "value_type": "percentage",
+      "value": 15,
+      "amount_saved": 15.9,
+      "stackable": true
+    },
+    {
+      "discount_id": "disc_002",
+      "type": "LOYALTY_REDEMPTION",
+      "description": "Loyalty points redemption (1000 pts)",
+      "applies_to": "order",
+      "value_type": "fixed_amount",
+      "value": 10.0,
+      "amount_saved": 10.0,
+      "loyalty_points_redeemed": 1000,
+      "stackable": true
+    }
+  ],
+  "loyalty_session": {
+    "account_id": "loyalty_jane_001",
+    "points_balance": 3500,
+    "points_redeemed": 1000,
+    "redemption_value_usd": 10.0,
+    "projected_earn": 840
+  },
+  "cart_mandate": {
+    "mandate_id": "cm_001",
+    "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+    "intent_mandate_id": "im_001",
+    "merchant_id": "merch_abc123",
+    "grand_total": 83.98,
+    "currency": "USD",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "issued_at": "2026-03-24T09:30:00Z",
+    "expires_at": "2026-03-24T09:45:00Z"
+  },
+  "available_payment_handlers": [
+    {
+      "id": "handler_google_pay",
+      "name": "Google Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/gpay.svg"
+    },
+    {
+      "id": "handler_apple_pay",
+      "name": "Apple Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/apay.svg"
+    }
+  ],
+  "risk_decision": {
+    "action": "allow",
+    "sca_required": false,
+    "reason": "Low risk; known device"
+  },
+  "mandate_chain": {
+    "intent_mandate_id": "im_001",
+    "intent_mandate_status": "valid",
+    "cart_mandate_id": "cm_001",
+    "cart_mandate_status": "pending_user_signature",
+    "settlement_mandate_id": null,
+    "settlement_mandate_status": "not_issued"
+  },
+  "available_actions": [
+    "update",
+    "cancel"
+  ],
+  "created_at": "2026-03-24T09:30:00Z",
+  "updated_at": "2026-03-24T09:30:00Z",
+  "expires_at": "2026-03-24T09:45:00Z"
+}</code></pre></div><div class="tab-pane " id="tab_response_404_2"><pre class="code"><code class="http">HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "not_found",
+    "message": "Checkout session fcp_sess_notexistent not found or has expired.",
+    "request_id": "req_fcp_404"
+  }
+}</code></pre></div></div></div></div></div>
+
+<!-- UPDATE CHECKOUT -->
+<h3 id="op-update" class="section-heading h3">Update Checkout — PATCH /v1/checkouts/{session_id}<a class="anchor" href="#op-update">¶</a></h3>
+<p>Modifies an active session. Only the fields provided in the request body are changed — this is a partial
+update (PATCH semantics), not a full replacement.</p>
+<p><strong>CartMandate invalidation.</strong> Any change that affects the computed price triggers
+the merchant to void the current CartMandate and issue a new one. The session reverts to
+<code>pending_mandate</code> status and <code>cart_mandate_invalidated: true</code> is returned.
+The agent must re-present the new CartMandate to the user for counter-signature before completing.</p>
+
+<table class="field-table">
+  <thead><tr><th>Change type</th><th>Invalidates CartMandate?</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Add / remove line items</td><td><span class="badge-req">yes</span></td><td>Subtotal changes; mandate must reflect new total</td></tr>
+    <tr><td>Apply / remove discount code</td><td><span class="badge-req">yes</span></td><td>grand_total changes</td></tr>
+    <tr><td>Change loyalty redemption amount</td><td><span class="badge-req">yes</span></td><td>loyalty_discount changes grand_total</td></tr>
+    <tr><td>Change shipping address to different tax zone</td><td><span class="badge-req">yes</span></td><td>Tax jurisdiction changes; tax_total changes</td></tr>
+    <tr><td>Update buyer email or phone only</td><td><span class="badge-opt">no</span></td><td>No effect on price computation</td></tr>
+    <tr><td>Update metadata</td><td><span class="badge-opt">no</span></td><td>Metadata is not part of the mandate payload</td></tr>
+  </tbody>
+</table>
+
+<div class="op-header">
+  <span class="op-method method-PATCH">PATCH</span>
+  <code class="op-path">/v1/checkouts/{{session_id}}</code>
+  <span class="op-summary">Update cart, discounts, or buyer details</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_add_item_(invalidates)_0')">Add item (invalidates)</button><button class="tab-btn " onclick="switchTab(this,'tab_apply_discount_(invalidates)_1')">Apply discount (invalidates)</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_2')">Response 200</button><button class="tab-btn " onclick="switchTab(this,'tab_response_409_3')">Response 409</button></div><div class="tab-content"><div class="tab-pane active" id="tab_add_item_(invalidates)_0"><pre class="code"><code class="http">PATCH /v1/checkouts/fcp_sess_a1b2c3d4e5f6g7h8 HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "line_items": {
+    "add": [
+      {
+        "catalog_id": "item_mouse_pad",
+        "quantity": 1
+      }
+    ]
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "ip_address": "203.0.113.42",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "user_agent": "FCPAgent/4.1.0"
+    },
+    "risk": {
+      "risk_score": 12,
+      "risk_signals": [],
+      "velocity_last_1h": 1,
+      "velocity_last_24h": 2
+    }
+  }
+}</code></pre></div><div class="tab-pane " id="tab_apply_discount_(invalidates)_1"><pre class="code"><code class="http">PATCH /v1/checkouts/fcp_sess_a1b2c3d4e5f6g7h8 HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "discounts": {
+    "apply": [
+      {
+        "type": "PROMO_CODE",
+        "code": "WELCOME10"
+      }
+    ]
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "ip_address": "203.0.113.42",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "user_agent": "FCPAgent/4.1.0"
+    },
+    "risk": {
+      "risk_score": 12,
+      "risk_signals": []
+    }
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_200_2"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+  "status": "pending_mandate",
+  "mode": "human_present",
+  "merchant_id": "merch_abc123",
+  "line_items": [
+    {
+      "line_item_id": "li_001",
+      "catalog_id": "item_headphones_pro",
+      "title": "Wireless Headphones Pro",
+      "quantity": 1,
+      "unit_price": 79.99,
+      "line_total": 79.99,
+      "in_stock": true
+    },
+    {
+      "line_item_id": "li_002",
+      "catalog_id": "item_usbc_cable",
+      "title": "USB-C Cable",
+      "quantity": 2,
+      "unit_price": 12.99,
+      "line_total": 25.98,
+      "in_stock": true
+    }
+  ],
+  "totals": {
+    "subtotal": 105.97,
+    "discount_total": 25.9,
+    "loyalty_discount": 10.0,
+    "tax_total": 6.91,
+    "shipping_total": 7.0,
+    "grand_total": 83.98,
+    "currency": "USD"
+  },
+  "discounts_applied": [
+    {
+      "discount_id": "disc_001",
+      "type": "PROMO_CODE",
+      "code": "SUMMER15",
+      "description": "Summer Sale \u2014 15% off",
+      "applies_to": "order",
+      "value_type": "percentage",
+      "value": 15,
+      "amount_saved": 15.9,
+      "stackable": true
+    },
+    {
+      "discount_id": "disc_002",
+      "type": "LOYALTY_REDEMPTION",
+      "description": "Loyalty points redemption (1000 pts)",
+      "applies_to": "order",
+      "value_type": "fixed_amount",
+      "value": 10.0,
+      "amount_saved": 10.0,
+      "loyalty_points_redeemed": 1000,
+      "stackable": true
+    }
+  ],
+  "loyalty_session": {
+    "account_id": "loyalty_jane_001",
+    "points_balance": 3500,
+    "points_redeemed": 1000,
+    "redemption_value_usd": 10.0,
+    "projected_earn": 840
+  },
+  "cart_mandate": {
+    "mandate_id": "cm_001",
+    "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+    "intent_mandate_id": "im_001",
+    "merchant_id": "merch_abc123",
+    "grand_total": 83.98,
+    "currency": "USD",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "issued_at": "2026-03-24T09:30:00Z",
+    "expires_at": "2026-03-24T09:45:00Z"
+  },
+  "available_payment_handlers": [
+    {
+      "id": "handler_google_pay",
+      "name": "Google Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/gpay.svg"
+    },
+    {
+      "id": "handler_apple_pay",
+      "name": "Apple Pay",
+      "type": "delegated_token",
+      "display_icon_url": "https://acme.example/icons/apay.svg"
+    }
+  ],
+  "risk_decision": {
+    "action": "allow",
+    "sca_required": false,
+    "reason": "Low risk; known device"
+  },
+  "mandate_chain": {
+    "intent_mandate_id": "im_001",
+    "intent_mandate_status": "valid",
+    "cart_mandate_id": "cm_001",
+    "cart_mandate_status": "pending_user_signature",
+    "settlement_mandate_id": null,
+    "settlement_mandate_status": "not_issued"
+  },
+  "available_actions": [
+    "update",
+    "cancel"
+  ],
+  "created_at": "2026-03-24T09:30:00Z",
+  "updated_at": "2026-03-24T09:30:00Z",
+  "expires_at": "2026-03-24T09:45:00Z",
+  "cart_mandate_invalidated": true
+}</code></pre></div><div class="tab-pane " id="tab_response_409_3"><pre class="code"><code class="http">HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "invalid_state",
+    "message": "Cannot update a checkout session with status 'completed'.",
+    "session_status": "completed",
+    "request_id": "req_fcp_409"
+  }
+}</code></pre></div></div></div></div></div>
+
+<h4 id="update-fields" class="section-heading h4">UpdateCheckoutRequest fields<a class="anchor" href="#update-fields">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>line_items</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>buyer</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">Buyer</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>metadata</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>client_context</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">ClientContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">LoyaltyCheckoutInput</span></td>
+          <td class="fd">Update loyalty redemption amount.</td>
+        </tr></tbody>
+    </table>
+
+<!-- CANCEL CHECKOUT -->
+<h3 id="op-cancel" class="section-heading h3">Cancel Checkout — POST /v1/checkouts/{session_id}/cancel<a class="anchor" href="#op-cancel">¶</a></h3>
+<p>Terminates an active session from any pre-completion state. Cancellation triggers the following
+protocol teardown sequence:</p>
+<ol>
+  <li><strong>Mandate revocation.</strong> The CartMandate's <code>mandate_id</code> is added to the merchant's
+      revocation list. Any subsequent attempt to submit this mandate in a <code>complete</code> request will be rejected.</li>
+  <li><strong>CP notification.</strong> The Credential Provider is notified asynchronously to void any
+      pre-staged payment token associated with this <code>mandate_id</code>. The agent never held the token,
+      but the CP may have pre-staged one; this ensures it cannot be used.</li>
+  <li><strong>Audit record.</strong> A signed <code>CancelRecord</code> is appended to the mandate chain,
+      recording the reason, initiator, and timestamp. This record is immutable.</li>
+</ol>
+<p>This operation is <strong>idempotent</strong> — cancelling an already-cancelled session returns
+<code>200</code> without error. Completed sessions cannot be cancelled; use your order management
+system to handle refunds.</p>
+<div class="callout callout-tip"><span class="callout-icon">✦</span><div>The session_id in the URL is the only required field. The request body is optional.</div></div>
+
+<div class="op-header">
+  <span class="op-method method-POST">POST</span>
+  <code class="op-path">/v1/checkouts/{{session_id}}/cancel</code>
+  <span class="op-summary">Cancel a checkout session</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_1')">Response 200</button><button class="tab-btn " onclick="switchTab(this,'tab_response_409_(completed)_2')">Response 409 (completed)</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">POST /v1/checkouts/fcp_sess_a1b2c3d4e5f6g7h8/cancel HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "reason": "user_abandoned",
+  "initiated_by": "consumer_agent"
+}</code></pre></div><div class="tab-pane " id="tab_response_200_1"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+  "status": "cancelled",
+  "cancelled_at": "2026-03-24T09:35:00Z",
+  "reason": "user_abandoned",
+  "mandate_voided": true,
+  "cp_notified": true,
+  "cancel_record_id": "cr_axcp_00987"
+}</code></pre></div><div class="tab-pane " id="tab_response_409_(completed)_2"><pre class="code"><code class="http">HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "invalid_state",
+    "message": "Cannot cancel a session with status 'completed'. Use the order management refund flow instead.",
+    "session_status": "completed",
+    "request_id": "req_fcp_409b"
+  }
+}</code></pre></div></div></div></div></div>
+
+<h4 id="cancel-reason" class="section-heading h4">CancelRequest.reason values<a class="anchor" href="#cancel-reason">¶</a></h4>
+<table class="field-table">
+  <thead><tr><th>Value</th><th>Description</th><th>Initiated by</th></tr></thead>
+  <tbody>
+    <tr><td><code>user_abandoned</code></td><td>User navigated away or explicitly dismissed the checkout</td><td>consumer_agent</td></tr>
+    <tr><td><code>item_unavailable</code></td><td>One or more items became unavailable after session creation</td><td>merchant_agent</td></tr>
+    <tr><td><code>payment_handler_unavailable</code></td><td>Selected payment handler is no longer available</td><td>consumer_agent</td></tr>
+    <tr><td><code>mandate_expired</code></td><td>IntentMandate expired before checkout could be completed</td><td>system</td></tr>
+    <tr><td><code>merchant_initiated</code></td><td>Merchant cancelled for business reasons (e.g. fraud suspicion)</td><td>merchant_agent</td></tr>
+    <tr><td><code>agent_error</code></td><td>Consumer agent encountered an unrecoverable error</td><td>consumer_agent</td></tr>
+    <tr><td><code>session_timeout</code></td><td>Session TTL elapsed (system auto-cancel)</td><td>system</td></tr>
+    <tr><td><code>other</code></td><td>Any other reason; use <code>notes</code> field for free-text explanation</td><td>any</td></tr>
+  </tbody>
+</table>
+
+<!-- COMPLETE CHECKOUT -->
+<h3 id="op-complete" class="section-heading h3">Complete Checkout — POST /v1/checkouts/{session_id}/complete<a class="anchor" href="#op-complete">¶</a></h3>
+<p><strong>Phase 2.</strong> The terminal success action. The agent submits the signed CartMandate,
+a payment handler reference, a total echo safeguard, and the current <code>client_context</code>.
+No payment credentials are included — the merchant resolves the payment token server-to-server.</p>
+
+<p>Before touching the PSP, the merchant executes this verification sequence in order:</p>
+
+<table class="field-table">
+  <thead><tr><th>#</th><th>Check</th><th>Error if failed</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Session exists and belongs to the authenticated caller</td><td><code>404 not_found</code></td></tr>
+    <tr><td>2</td><td>Session status is <code>ready</code></td><td><code>422 invalid_state</code></td></tr>
+    <tr><td>3</td><td><code>cart_mandate.session_id</code> matches the URL <code>session_id</code> (inside the merchant's own signature)</td><td><code>422 session_mismatch</code></td></tr>
+    <tr><td>4</td><td>Merchant's signature on <code>cart_mandate</code> is cryptographically valid</td><td><code>422 mandate_signature_invalid</code></td></tr>
+    <tr><td>5</td><td>User's <code>user_counter_signature</code> (or <code>agent_auto_signature</code>) is valid</td><td><code>422 mandate_signature_invalid</code></td></tr>
+    <tr><td>6</td><td><code>cart_mandate.grand_total</code> matches server-recomputed total (price drift guard)</td><td><code>422 amount_mismatch</code></td></tr>
+    <tr><td>7</td><td><code>confirm_total</code> matches <code>cart_mandate.grand_total</code> (agent echo guard)</td><td><code>422 amount_mismatch</code></td></tr>
+    <tr><td>8</td><td>IntentMandate constraints still satisfied (max_amount, merchant_id, expiry)</td><td><code>422 mandate_constraint_violated</code></td></tr>
+    <tr><td>9</td><td><code>client_context.device.device_id</code> matches create-time device_id</td><td><code>422 device_mismatch</code></td></tr>
+    <tr><td>10</td><td><code>client_context.risk.risk_score</code> is below merchant's SCA threshold</td><td><code>422 risk_threshold_exceeded</code></td></tr>
+    <tr><td>11</td><td>Idempotency key not already used for a completed transaction</td><td><code>200</code> (cached response, no double-charge)</td></tr>
+    <tr><td>12</td><td>Merchant calls CP: <code>resolve_payment(mandate_id, handler_id, grand_total)</code></td><td><code>402 cp_token_resolution_failed</code></td></tr>
+    <tr><td>13</td><td>PSP authorises and captures payment</td><td><code>402 payment_declined</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout callout-danger"><span class="callout-icon">⛔</span><div><strong>This action is irreversible</strong> once <code>status: completed</code> is returned. The idempotency key is required and must be a fresh UUID. The same key cannot be reused for a different session.</div></div>
+
+<div class="op-header">
+  <span class="op-method method-POST">POST</span>
+  <code class="op-path">/v1/checkouts/{{session_id}}/complete</code>
+  <span class="op-summary">Authorise and fire — Phase 2</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_1')">Response 200</button><button class="tab-btn " onclick="switchTab(this,'tab_response_422_amount_2')">Response 422 amount</button><button class="tab-btn " onclick="switchTab(this,'tab_response_422_device_3')">Response 422 device</button><button class="tab-btn " onclick="switchTab(this,'tab_response_402_declined_4')">Response 402 declined</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">POST /v1/checkouts/fcp_sess_a1b2c3d4e5f6g7h8/complete HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+FCP-Version: 1.0
+FCP-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+{
+  "confirm_total": 83.98,
+  "currency": "USD",
+  "payment_handler_id": "handler_google_pay",
+  "cart_mandate": {
+    "mandate_id": "cm_001",
+    "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "user_counter_signature": "eyJhbGciOiJFUzI1NiJ9.user...",
+    "signed_at": "2026-03-24T09:44:00Z"
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "region": "GA",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.42",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "os": "iOS",
+      "os_version": "18.2",
+      "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+      "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+      "is_emulator": false,
+      "is_rooted": false,
+      "app_version": "4.1.0"
+    },
+    "risk": {
+      "session_age_seconds": 310,
+      "is_new_device": false,
+      "previous_orders_count": 7,
+      "account_age_days": 412,
+      "velocity_last_1h": 1,
+      "velocity_last_24h": 2,
+      "risk_score": 14,
+      "risk_signals": []
+    }
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_200_1"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+  "status": "completed",
+  "order_id": "ord_20260324_00123",
+  "completed_at": "2026-03-24T09:45:00Z",
+  "grand_total": 83.98,
+  "currency": "USD",
+  "discounts_applied": [
+    {
+      "discount_id": "disc_001",
+      "type": "PROMO_CODE",
+      "code": "SUMMER15",
+      "amount_saved": 15.9
+    },
+    {
+      "discount_id": "disc_002",
+      "type": "LOYALTY_REDEMPTION",
+      "amount_saved": 10.0,
+      "loyalty_points_redeemed": 1000
+    }
+  ],
+  "loyalty_result": {
+    "account_id": "loyalty_jane_001",
+    "points_redeemed": 1000,
+    "redemption_value_usd": 10.0,
+    "points_earned": 840,
+    "new_balance": 3340
+  },
+  "settlement": {
+    "settlement_mandate_id": "sm_001",
+    "psp_transaction_id": "psp_txn_abc123",
+    "amount_captured": 83.98,
+    "currency": "USD",
+    "payment_network": "VISA",
+    "network_auth_code": "AUTH_20260324_XYZ",
+    "settled_at": "2026-03-24T09:45:02Z"
+  },
+  "mandate_chain": {
+    "intent_mandate_id": "im_001",
+    "intent_mandate_status": "valid",
+    "cart_mandate_id": "cm_001",
+    "cart_mandate_status": "signed",
+    "settlement_mandate_id": "sm_001",
+    "settlement_mandate_status": "settled"
+  },
+  "receipt_url": "https://acme.example/receipts/ord_20260324_00123"
+}</code></pre></div><div class="tab-pane " id="tab_response_422_amount_2"><pre class="code"><code class="http">HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "amount_mismatch",
+    "message": "confirm_total 85.00 does not match cart_mandate.grand_total 83.98. Ensure you are reading grand_total from the most recent CartMandate.",
+    "field": "confirm_total",
+    "request_id": "req_fcp_422a"
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_422_device_3"><pre class="code"><code class="http">HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "device_mismatch",
+    "message": "client_context.device.device_id 'dev_different_device' differs from device_id recorded at session create 'dev_a1b2c3d4e5f6'. Possible session hijack.",
+    "field": "client_context.device.device_id",
+    "request_id": "req_fcp_422b"
+  }
+}</code></pre></div><div class="tab-pane " id="tab_response_402_declined_4"><pre class="code"><code class="http">HTTP/1.1 402 Payment Required
+Content-Type: application/json
+
+{
+  "error": {
+    "code": "payment_declined",
+    "message": "PSP declined the transaction. Reason: insufficient_funds.",
+    "psp_decline_code": "insufficient_funds",
+    "mandate_id": "cm_001",
+    "request_id": "req_fcp_402"
+  }
+}</code></pre></div></div></div></div></div>
+
+<h4 id="complete-fields" class="section-heading h4">CompleteCheckoutRequest fields<a class="anchor" href="#complete-fields">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>confirm_total</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">Must match cart_mandate.grand_total to the cent.
+Guards against silent price drift between session creation and completion.
+<div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>USD</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>payment_handler_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">ID of a handler declared in the merchant's capability profile.
+The agent presents the handler list (from the profile) to the user
+after CREATE; the user picks one; this field carries that choice.
+The merchant uses this to call the correct CP at settlement time.
+The agent never receives or submits the resulting token.
+<div class="field-ex">Example: <code>handler_google_pay</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>cart_mandate</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">CartMandateSigned</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>client_context</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">ClientContext</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h4 id="complete-cart-mandate" class="section-heading h4">cart_mandate — CartMandateSigned<a class="anchor" href="#complete-cart-mandate">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>cm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>session_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Must match the URL session_id. Verified inside the merchant
+signature — cannot be altered without breaking the signature.
+<div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Unchanged from CartMandateIssued<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.merchant...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>user_counter_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">User's JWS counter-signature (human_present)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.user...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>agent_auto_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Agent JWS auto-sig (human_not_present, within IntentMandate bounds)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.agent...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+<div class="callout callout-warn"><span class="callout-icon">⚠</span><div>The <code>merchant_signature</code> field must be copied unchanged from the <code>CartMandateIssued</code> object returned in the session response. Any modification breaks the signature and the request will be rejected.</div></div>
+
+<h4 id="complete-response" class="section-heading h4">CompleteResponse fields<a class="anchor" href="#complete-response">¶</a></h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>status</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">completed</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>order_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>ord_20260324_00123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>completed_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>grand_total</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>settlement</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">SettlementRecord</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>mandate_chain</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">MandateChainSummary</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>receipt_url</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">uri</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_applied</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd">Discounts that were applied on this completed order.</td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_result</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">LoyaltyCheckoutResult</span></td>
+          <td class="fd">Present when loyalty account was attached to session.</td>
+        </tr></tbody>
+    </table>
+
+<!-- VERIFY MANDATE -->
+<h3 id="op-verify" class="section-heading h3">Verify Mandate — POST /v1/mandates/verify<a class="anchor" href="#op-verify">¶</a></h3>
+<p>Utility endpoint for PSPs, payment networks, auditors, and dispute resolution teams to verify
+the cryptographic integrity of a mandate or mandate chain. This endpoint can be used to confirm
+that a CartMandate or SettlementMandate was genuinely signed by the merchant and the user before
+processing a chargeback representment.</p>
+
+<div class="op-header">
+  <span class="op-method method-POST">POST</span>
+  <code class="op-path">/v1/mandates/verify</code>
+  <span class="op-summary">Verify a mandate chain</span>
+</div>
+<div class="op-block"><div class="op-body"><div class="tabs"><div class="tab-bar"><button class="tab-btn active" onclick="switchTab(this,'tab_request_0')">Request</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_valid_1')">Response 200 valid</button><button class="tab-btn " onclick="switchTab(this,'tab_response_200_invalid_2')">Response 200 invalid</button></div><div class="tab-content"><div class="tab-pane active" id="tab_request_0"><pre class="code"><code class="http">POST /v1/mandates/verify HTTP/1.1
+Authorization: Bearer eyJhbGciOiJSUzI1NiJ9...
+FCP-Agent: profile="https://my-agent.example/profiles/shopping-agent.json"
+Content-Type: application/json
+
+{
+  "mandates": [
+    {
+      "mandate_type": "cart",
+      "payload": {
+        "mandate_id": "cm_001",
+        "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+        "grand_total": 83.98,
+        "merchant_id": "merch_abc123"
+      },
+      "signature": "eyJhbGciOiJFUzI1NiJ9.merchant..."
+    }
+  ]
+}</code></pre></div><div class="tab-pane " id="tab_response_200_valid_1"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "overall_valid": true,
+  "results": [
+    {
+      "mandate_id": "cm_001",
+      "valid": true,
+      "violations": []
+    }
+  ]
+}</code></pre></div><div class="tab-pane " id="tab_response_200_invalid_2"><pre class="code"><code class="http">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "overall_valid": false,
+  "results": [
+    {
+      "mandate_id": "cm_001",
+      "valid": false,
+      "violations": [
+        "merchant_signature: signature verification failed against trust_anchor DID did:web:acme.example",
+        "grand_total: mandate value 83.98 does not match submitted payload value 85.00 \u2014 possible tampering"
+      ]
+    }
+  ]
+}</code></pre></div></div></div></div></div>
+
+<hr>
+
+<!-- ── HTTP HEADERS ── -->
+<h2 id="headers" class="section-heading">HTTP Headers<a class="anchor" href="#headers">¶</a></h2>
+
+<h3 id="headers-request" class="section-heading h3">Request Headers<a class="anchor" href="#headers-request">¶</a></h3>
+<table class="header-table">
+  <thead><tr><th>Header</th><th>Required</th><th>Applies to</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>Authorization</code></td><td class="req-y">Yes</td><td>All except GET /.well-known/fcp</td><td>OAuth 2.0 bearer token. Format: <code>Bearer &lt;token&gt;</code>. See <a href="#auth-oauth">OAuth 2.0</a>.</td></tr>
+    <tr><td><code>FCP-Agent</code></td><td class="req-y">Yes</td><td>All</td><td>Agent capability profile URI using RFC 8941 Dictionary syntax. Format: <code>profile="https://agent.example/.well-known/fcp"</code>. The merchant <strong class="may">MAY</strong> fetch this URI to understand agent capabilities and apply capability-based policies.. </td></tr>
+    <tr><td><code>FCP-Version</code></td><td class="req-y">Yes</td><td>All</td><td>Protocol version. Current value: <code>1.0</code>. The merchant <strong class="should">SHOULD</strong> return 400 for unsupported major versions. </td></tr>
+    <tr><td><code>FCP-Idempotency-Key</code></td><td class="req-y">Yes on POST</td><td>POST requests</td><td>Client-generated UUID (RFC 4122). <strong class="must">MUST</strong> be unique per logical operation — do not reuse keys across different sessions. The server <strong class="must">MUST</strong> store the key for at least 24 hours and return the cached response for duplicate keys. If the same key is submitted with different parameters, <strong class="must">MUST</strong> return 409 Conflict. </td></tr>
+    <tr><td><code>FCP-Client-Context</code></td><td class="req-y">Yes on GET</td><td>GET requests only</td><td>base64url-encoded (no padding) JSON representation of the <code>ClientContext</code> object. Used because GET requests have no body. On POST/PATCH, submit <code>client_context</code> in the request body instead.</td></tr>
+    <tr><td><code>Content-Type</code></td><td class="req-y">Yes on POST/PATCH</td><td>POST, PATCH</td><td>Must be <code>application/json</code>.</td></tr>
+    <tr><td><code>Accept</code></td><td class="req-n">No</td><td>All</td><td>The server always returns <code>application/json</code>. This header is accepted but not required.</td></tr>
+    <tr><td><code>Accept-Language</code></td><td class="req-n">No</td><td>All</td><td>BCP 47 language tag. When provided, the server <strong class="may">MAY</strong> localise error messages. </td></tr>
+    <tr><td><code>User-Agent</code></td><td class="req-n">No</td><td>All</td><td>Identifies the FCP client implementation. Recommended format: <code>AgentName/version (platform; os)</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="headers-client-context" class="section-heading h3">FCP-Client-Context Encoding<a class="anchor" href="#headers-client-context">¶</a></h3>
+<p>For GET requests, the <code>ClientContext</code> object is base64url-encoded (without padding characters)
+and submitted in the <code>FCP-Client-Context</code> header. The encoding follows
+<a href="https://datatracker.ietf.org/doc/html/rfc4648#section-5" target="_blank">RFC 4648 §5 (base64url)</a>.</p>
+<p>Example encoding (Python):</p>
+<pre class="code"><code class="python">import json, base64
+ctx = {
+  "location": {"country": "US", "ip_address": "203.0.113.42",
+                "is_vpn": False, "is_proxy": False, "is_tor": False},
+  "device": {"device_id": "dev_a1b2c3", "device_type": "mobile",
+              "user_agent": "FCPAgent/4.1.0"},
+  "risk": {"risk_score": 12, "risk_signals": []}
+}
+encoded = base64.urlsafe_b64encode(json.dumps(ctx).encode()).rstrip(b'=').decode()
+# FCP-Client-Context: eyJsb2NhdGlvbiI6...</code></pre>
+
+<hr>
+
+<!-- ── PROTOCOL MECHANICS ── -->
+<h2 id="protocol-mechanics" class="section-heading">Protocol Mechanics<a class="anchor" href="#protocol-mechanics">¶</a></h2>
+
+<h3 id="status-codes" class="section-heading h3">Status Codes<a class="anchor" href="#status-codes">¶</a></h3>
+<table class="status-table">
+  <thead><tr><th>Code</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><span class="sc sc-2">200 OK</span></td><td>The request was successful. Used for GET, PATCH, cancel, complete.</td></tr>
+    <tr><td><span class="sc sc-2">201 Created</span></td><td>A new checkout session was successfully created (create checkout only).</td></tr>
+    <tr><td><span class="sc sc-4">400 Bad Request</span></td><td>The request body is malformed, missing required fields, or contains invalid JSON.</td></tr>
+    <tr><td><span class="sc sc-4">401 Unauthorized</span></td><td>The bearer token is missing, expired, or invalid.</td></tr>
+    <tr><td><span class="sc sc-4">402 Payment Required</span></td><td>The payment was declined by the PSP or the Credential Provider could not resolve the payment token. The session is NOT cancelled — the agent may retry with a different payment handler.</td></tr>
+    <tr><td><span class="sc sc-4">404 Not Found</span></td><td>The session_id does not exist or has expired.</td></tr>
+    <tr><td><span class="sc sc-4">409 Conflict</span></td><td>State conflict — the operation is not permitted in the current session state (e.g. updating a completed session), or the idempotency key was reused with different parameters.</td></tr>
+    <tr><td><span class="sc sc-4">422 Unprocessable Entity</span></td><td>The request is syntactically valid but fails business logic or cryptographic verification. See <a href="#error-codes">Error Codes</a> for specific codes.</td></tr>
+    <tr><td><span class="sc sc-4">429 Too Many Requests</span></td><td>Rate limit exceeded. The response <strong class="should">SHOULD</strong> include a Retry-After header. </td></tr>
+    <tr><td><span class="sc sc-4">451 Unavailable For Legal Reasons</span></td><td>Geo-restricted — the merchant cannot sell to the location indicated in <code>client_context.location.country</code>.</td></tr>
+    <tr><td><span class="sc sc-5">500 Internal Server Error</span></td><td>Unexpected server error. The agent should retry with exponential backoff.</td></tr>
+    <tr><td><span class="sc sc-5">503 Service Unavailable</span></td><td>Temporary unavailability. The response <strong class="should">SHOULD</strong> include a Retry-After header. </td></tr>
+  </tbody>
+</table>
+
+<h3 id="error-responses" class="section-heading h3">Error Responses<a class="anchor" href="#error-responses">¶</a></h3>
+<p>All 4xx and 5xx responses return a JSON body with an <code>error</code> envelope:</p>
+<pre class="code"><code class="json">{
+  "error": {
+    "code": "string \u2014 machine-readable code",
+    "message": "string \u2014 human-readable description",
+    "field": "string? \u2014 dotted path of the offending field",
+    "session_status": "string? \u2014 current session status (state conflict errors)",
+    "mandate_id": "string? \u2014 relevant mandate ID (mandate errors)",
+    "psp_decline_code": "string? \u2014 PSP-specific code (402 errors only)",
+    "request_id": "string \u2014 unique request ID for support tracing"
+  }
+}</code></pre>
+
+<h3 id="error-codes" class="section-heading h3">Error Code Registry<a class="anchor" href="#error-codes">¶</a></h3>
+<table class="status-table">
+  <thead><tr><th>Code</th><th>HTTP Status</th><th>Endpoint</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>not_found</code></td><td><span class="sc sc-4">404</span></td><td>GET, PATCH, cancel, complete</td><td>Session does not exist or has expired</td></tr>
+    <tr><td><code>invalid_state</code></td><td><span class="sc sc-4">409</span></td><td>PATCH, cancel, complete</td><td>Operation not permitted in the current session status</td></tr>
+    <tr><td><code>duplicate_idempotency_key</code></td><td><span class="sc sc-4">409</span></td><td>POST /v1/checkouts</td><td>Idempotency key already used with different parameters</td></tr>
+    <tr><td><code>geo_restricted</code></td><td><span class="sc sc-4">451</span></td><td>Create</td><td>Merchant cannot sell to <code>client_context.location.country</code></td></tr>
+    <tr><td><code>mandate_constraint_violated</code></td><td><span class="sc sc-4">422</span></td><td>Create, Complete</td><td>Cart total exceeds IntentMandate max_amount, or mandate has expired, or merchant_id does not match</td></tr>
+    <tr><td><code>mandate_signature_invalid</code></td><td><span class="sc sc-4">422</span></td><td>Create, Complete</td><td>Cryptographic signature verification failed on IntentMandate or CartMandate</td></tr>
+    <tr><td><code>session_mismatch</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td><code>cart_mandate.session_id</code> does not match the URL session_id</td></tr>
+    <tr><td><code>amount_mismatch</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td><code>confirm_total</code> does not match <code>cart_mandate.grand_total</code> or server-recomputed total</td></tr>
+    <tr><td><code>device_mismatch</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td><code>client_context.device.device_id</code> changed between create and complete</td></tr>
+    <tr><td><code>location_changed</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td><code>client_context.location.country</code> changed between create and complete</td></tr>
+    <tr><td><code>risk_threshold_exceeded</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td>Risk score exceeds merchant's configured SCA threshold</td></tr>
+    <tr><td><code>unknown_payment_handler</code></td><td><span class="sc sc-4">422</span></td><td>Complete</td><td><code>payment_handler_id</code> is not declared in the merchant's capability profile</td></tr>
+    <tr><td><code>cp_token_resolution_failed</code></td><td><span class="sc sc-4">402</span></td><td>Complete</td><td>Credential Provider could not resolve a payment token for the mandate_id</td></tr>
+    <tr><td><code>payment_declined</code></td><td><span class="sc sc-4">402</span></td><td>Complete</td><td>PSP declined the transaction. See <code>psp_decline_code</code> for the reason</td></tr>
+  </tbody>
+</table>
+
+<h3 id="idempotency" class="section-heading h3">Idempotency<a class="anchor" href="#idempotency">¶</a></h3>
+<p>All state-mutating requests <strong class="must">MUST</strong> include a <code>FCP-Idempotency-Key</code> header.
+This is particularly critical for <code>complete</code>, which captures payment.</p>
+<ul>
+  <li>The key <strong class="must">MUST</strong> be a UUID v4 (RFC 4122). </li>
+  <li>The server <strong class="must">MUST</strong> store the key and its response for at least 24 hours. </li>
+  <li>Retrying with the same key returns the cached response without executing the operation again.</li>
+  <li>Submitting the same key with different parameters <strong class="must">MUST</strong> return 409 Conflict. </li>
+  <li>Each logical operation <strong class="should">SHOULD</strong> use a fresh key. Do not reuse the create-checkout key for complete.</li>
+</ul>
+<div class="callout callout-warn"><span class="callout-icon">⚠</span><div>If a <code>complete</code> request times out or returns a network error with no response, the agent should wait and then call <code>GET /v1/checkouts/{id}</code> to check whether the session is <code>completed</code> before retrying with the same idempotency key. This prevents double-charges.</div></div>
+
+<h3 id="session-lifecycle" class="section-heading h3">Session Lifecycle<a class="anchor" href="#session-lifecycle">¶</a></h3>
+<div class="flow-diagram">
+  <div class="flow-row">
+    <div class="flow-step active">DISCOVER</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">CREATE</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">pending_mandate</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">ready</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step success">completed</div>
+  </div>
+  <div class="flow-row" style="margin-top:8px;padding-left:140px">
+    <span class="flow-arrow" style="color:#c62828">↓ CANCEL</span>
+    <span style="padding:0 12px;color:#868e96">or</span>
+    <span class="flow-arrow" style="color:#868e96">↓ TTL elapsed</span>
+  </div>
+  <div class="flow-row" style="margin-top:4px;padding-left:120px">
+    <div class="flow-step error">cancelled</div>
+    <span style="padding:0 20px;color:#868e96">·</span>
+    <div class="flow-step terminal">expired</div>
+  </div>
+</div>
+
+<table class="field-table">
+  <thead><tr><th>Status</th><th>Entered when</th><th>Allowed next actions</th><th>TTL</th></tr></thead>
+  <tbody>
+    <tr><td><code>pending_mandate</code></td><td>Session created (POST) or CartMandate invalidated by update</td><td>GET, PATCH, cancel</td><td>15 min (human_present) / 24 hr (human_not_present)</td></tr>
+    <tr><td><code>ready</code></td><td>User has counter-signed the CartMandate (client-side action)</td><td>GET, PATCH (non-price), cancel, complete</td><td>Same as above, from session create</td></tr>
+    <tr><td><code>completed</code></td><td>complete succeeds — payment captured, order created</td><td>None (terminal)</td><td>N/A</td></tr>
+    <tr><td><code>cancelled</code></td><td>cancel called, or merchant initiates cancellation</td><td>None (terminal)</td><td>N/A</td></tr>
+    <tr><td><code>expired</code></td><td>TTL elapsed before completion</td><td>None (terminal) — create a new session</td><td>N/A</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- ── SECURITY ── -->
+<h2 id="security" class="section-heading">Security<a class="anchor" href="#security">¶</a></h2>
+
+<h3 id="mandate-chain" class="section-heading h3">Mandate Chain<a class="anchor" href="#mandate-chain">¶</a></h3>
+<p>The mandate chain is FCP's core security mechanism. It provides cryptographic proof that a
+specific user explicitly authorised a specific agent to spend a specific amount at a specific merchant.
+Every completed FCP transaction produces a tamper-evident three-mandate chain that serves as
+legally-admissible evidence for dispute resolution.</p>
+<div class="flow-diagram">
+  <div class="flow-row">
+    <div class="flow-step">IntentMandate<br><small style="color:#868e96">signed by user</small></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">CartMandate<br><small style="color:#868e96">merchant signs, user counter-signs</small></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step success">SettlementMandate<br><small style="color:#2e7d32">merchant → PSP</small></div>
+  </div>
+</div>
+
+<h3 id="intent-mandate" class="section-heading h3">IntentMandate<a class="anchor" href="#intent-mandate">¶</a></h3>
+<p>A Verifiable Digital Credential (VDC) created by the Consumer Agent and signed by the user
+using a hardware-backed private key (e.g. device Secure Enclave or hardware security key).
+It captures the user's shopping intent and the constraints under which the agent is
+authorised to act.</p>
+<p>The IntentMandate answers: <em>"What did this user authorise their agent to do, and within what limits?"</em></p>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>im_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_by</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">DID of the signing key<div class="field-ex">Example: <code>did:key:zAgent123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>constraints</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>issued_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+<div class="callout callout-info"><span class="callout-icon">ℹ</span><div>The <code>signed_by</code> field is a W3C Decentralized Identifier (DID). The merchant resolves the DID to obtain the user's public key and uses it to verify the <code>signature</code>. If the DID cannot be resolved or the signature fails, the create request is rejected with <code>422 mandate_signature_invalid</code>.</div></div>
+
+<h3 id="cart-mandate" class="section-heading h3">CartMandate<a class="anchor" href="#cart-mandate">¶</a></h3>
+<p>The CartMandate is issued by the merchant after computing exact totals. It is the binding
+contract between Phase 1 and Phase 2. It contains the <code>session_id</code> inside the
+merchant's JWS signature — creating a cryptographic binding between the checkout session and
+the complete request.</p>
+<p>The CartMandate answers: <em>"What exactly did the merchant commit to deliver, and what did the user agree to pay?"</em></p>
+<p>Two forms exist in the protocol:</p>
+
+<h4 class="section-heading h4">CartMandateIssued (returned by merchant in session response)</h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>cm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>session_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Inside the merchant's signature. Binds this mandate to the session.
+When the agent submits this mandate in complete, the merchant
+extracts and verifies session_id from the signed payload — not
+just from the URL.
+<div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>intent_mandate_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>im_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>merch_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>line_item_snapshot</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<LineItemResolved></span></td>
+          <td class="fd">Immutable cart snapshot at mandate issuance time</td>
+        </tr><tr>
+          <td class="fn"><code>grand_total</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">The exact amount that will be charged<div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>USD</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">JWS over the full CartMandate payload<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.merchant...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>issued_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>expires_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_snapshot</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd">Discounts locked into this mandate at issuance — immutable once signed.</td>
+        </tr></tbody>
+    </table>
+
+<h4 class="section-heading h4">CartMandateSigned (submitted by agent in complete request)</h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>cm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>session_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Must match the URL session_id. Verified inside the merchant
+signature — cannot be altered without breaking the signature.
+<div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Unchanged from CartMandateIssued<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.merchant...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>user_counter_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">User's JWS counter-signature (human_present)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.user...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>agent_auto_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Agent JWS auto-sig (human_not_present, within IntentMandate bounds)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.agent...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="settlement-mandate" class="section-heading h3">SettlementMandate<a class="anchor" href="#settlement-mandate">¶</a></h3>
+<p>The SettlementMandate is issued by the merchant after verifying the full CartMandate chain.
+It packages the verified mandate chain into a payment instruction and sends it to the PSP
+alongside the payment token resolved from the Credential Provider. The Consumer Agent
+never sees the SettlementMandate or the payment token.</p>
+<p>The <code>settlement_mandate_id</code> is returned in the <code>CompleteResponse.settlement</code>
+block and in the <code>mandate_chain</code> summary. This ID is the primary reference for
+post-purchase dispute resolution.</p>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>settlement_mandate_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>sm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>psp_transaction_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>psp_txn_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>amount_captured</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>USD</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>payment_network</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>VISA</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>network_auth_code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>AUTH_20260324_XYZ</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>settled_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="client-context-security" class="section-heading h3">client_context &amp; Risk Scoring<a class="anchor" href="#client-context-security">¶</a></h3>
+<p>Every FCP request <strong class="must">MUST</strong> include a <code>client_context</code> object carrying three groups of
+signals. These are not optional telemetry — they are protocol-level inputs used for fraud prevention,
+regulatory compliance, and risk-based payment routing.</p>
+<p>At <code>complete</code> time, the merchant performs a <strong>delta check</strong> comparing
+the <code>client_context</code> received at complete against the one recorded at create:</p>
+<table class="field-table">
+  <thead><tr><th>Delta condition</th><th>Interpretation</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><code>device.device_id</code> changed</td><td>Session may have been hijacked by a different device</td><td>Reject with <code>422 device_mismatch</code></td></tr>
+    <tr><td><code>location.country</code> changed</td><td>Location appears inconsistent; potential VPN switch or spoofing</td><td>Flag for review; <strong class="may">MAY</strong> reject or escalate to SCA</td></tr>
+    <tr><td><code>risk.risk_score</code> increased significantly</td><td>Behavioural risk signals changed during session</td><td>Escalate to SCA if score exceeds merchant threshold</td></tr>
+    <tr><td><code>location.is_tor</code> became true</td><td>Client switched to Tor exit node during session</td><td>Reject or apply highest-friction SCA</td></tr>
+    <tr><td>All fields consistent</td><td>Normal, expected behaviour</td><td>Continue to mandate verification</td></tr>
+  </tbody>
+</table>
+
+<h4 class="section-heading h4">LocationContext fields</h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>latitude</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">GPS latitude. Omit for server-side agents.<div class="field-ex">Example: <code>33.749</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>longitude</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">GPS longitude.<div class="field-ex">Example: <code>-84.388</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>country</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">ISO 3166-1 alpha-2 country code derived from GPS or IP.<div class="constraints">pattern: <code>^[A-Z]{2}$</code></div><div class="field-ex">Example: <code>US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>region</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">State / province / region code.<div class="field-ex">Example: <code>GA</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>city</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>Atlanta</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>postal_code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Used for precise tax jurisdiction resolution.<div class="field-ex">Example: <code>30301</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>ip_address</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">IPv4 or IPv6 of the requesting client.<div class="field-ex">Example: <code>203.0.113.42</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>ip_country</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Country resolved from IP geolocation. May differ from GPS country — mismatch is a risk signal.<div class="constraints">pattern: <code>^[A-Z]{2}$</code></div><div class="field-ex">Example: <code>US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_vpn</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as a known VPN exit node.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_proxy</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as an open or commercial proxy.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_tor</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as a Tor exit node.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h4 class="section-heading h4">DeviceContext fields</h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>device_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Stable per-device ID. Must be consistent across the session — mismatch between create and complete triggers a security alert.<div class="field-ex">Example: <code>dev_a1b2c3d4e5f6</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>device_type</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">mobile</code> <code class="ev">tablet</code> <code class="ev">desktop</code> <code class="ev">wearable</code> <code class="ev">tv</code> <code class="ev">server</code> <code class="ev">iot</code> <code class="ev">unknown</code></div><div class="field-ex">Example: <code>mobile</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>os</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>iOS</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>os_version</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>18.2</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>app_version</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Version of the agent app or runtime.<div class="field-ex">Example: <code>4.1.0</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>user_agent</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Full User-Agent string.<div class="field-ex">Example: <code>FCPAgent/4.1.0 (iOS 18.2; iPhone)</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>fingerprint</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Hardware/software hash for cross-session fraud correlation.<div class="field-ex">Example: <code>fp_7f8e9d0a1b2c3d4e</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_emulator</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">Device is a software emulator — associated with automated fraud tooling.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_rooted</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">OS has been rooted or jailbroken — weakened key storage, elevated risk.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>screen_resolution</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">WxH pixels (mobile/desktop only).<div class="field-ex">Example: <code>390x844</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>language</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Device/app locale.<div class="field-ex">Example: <code>en-US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>timezone</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">IANA timezone.<div class="field-ex">Example: <code>America/New_York</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h4 class="section-heading h4">RiskContext fields</h4>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_age_seconds</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Active session duration in seconds. Very short + high-value order = automated fraud pattern.<div class="field-ex">Example: <code>142</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_new_device</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">First-seen device_id for this user.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>previous_orders_count</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Total historical orders by this user at this merchant.<div class="field-ex">Example: <code>7</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>account_age_days</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Age of the user account at this merchant in days.<div class="field-ex">Example: <code>412</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>velocity_last_1h</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Checkout attempts in the last 1 hour.<div class="field-ex">Example: <code>1</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>velocity_last_24h</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Checkout attempts in the last 24 hours.<div class="field-ex">Example: <code>2</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>risk_score</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Composite score 0–100. 0 = no risk, 100 = max risk. Merchant configures thresholds: e.g. >70 = SCA required, >90 = reject.<div class="constraints">min: 0  ·  max: 100</div><div class="field-ex">Example: <code>12</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>risk_signals</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<string></span></td>
+          <td class="fd">Discrete flags contributing to risk_score. Empty array means no signals triggered.<div class="field-ex">Example: <code>[]</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>three_ds_exemption_claimed</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-null">nullable</span></td>
+          <td class="fd">PSD2 3DS exemption reason if claimed. Null = no exemption, SCA proceeds normally.<div class="enum-vals"><code class="ev">low_value</code> <code class="ev">trusted_beneficiary</code> <code class="ev">recurring_transaction</code> <code class="ev">corporate_payment</code> <code class="ev">low_risk_analysis</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="payment-token-flow" class="section-heading h3">Payment Token Flow<a class="anchor" href="#payment-token-flow">¶</a></h3>
+<p>FCP deliberately excludes the payment token from the complete request. The agent submits
+<code>payment_handler_id</code> as a reference only — the merchant calls the Credential Provider
+server-to-server using the <code>mandate_id</code> as a key, and the CP delivers the token
+directly to the PSP. This eliminates the agent as a payment credential intermediary.</p>
+<pre class="code"><code class="text">Agent               Merchant              Credential Provider    PSP
+  │                    │                         │                 │
+  │  POST /complete    │                         │                 │
+  │  { cart_mandate,   │                         │                 │
+  │    handler_id,     │  resolve_payment(        │                 │
+  │    confirm_total,  │    mandate_id: "cm_001", │                 │
+  │    client_context} │    handler_id: "gpay",   │                 │
+  │───────────────────►│    grand_total: 83.98)   │                 │
+  │                    │────────────────────────►│                 │
+  │                    │◄────────────────────────│  token          │
+  │                    │  SettlementMandate                        │
+  │                    │  + token                                  │
+  │                    │──────────────────────────────────────────►│
+  │                    │◄──────────────────────────────────────────│
+  │  200 { order_id }  │                         │                 │
+  │◄───────────────────│                         │                 │
+  
+  The agent sees: order_id only
+  The merchant sees: token (server-side only, not logged to agent)
+  The PSP sees: SettlementMandate + token</code></pre>
+
+<hr>
+
+<!-- ── SCHEMA REFERENCE ── -->
+<h2 id="schema-reference" class="section-heading">Schema Reference<a class="anchor" href="#schema-reference">¶</a></h2>
+
+<h3 id="schema-ClientContext" class="section-heading h3">ClientContext<a class="anchor" href="#schema-ClientContext">¶</a></h3>
+<p>Wrapper for location, device, and risk signal groups. Required on all requests.</p>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>location</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">LocationContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>device</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">DeviceContext</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>risk</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">RiskContext</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-LocationContext" class="section-heading h3">LocationContext<a class="anchor" href="#schema-LocationContext">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>latitude</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">GPS latitude. Omit for server-side agents.<div class="field-ex">Example: <code>33.749</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>longitude</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">GPS longitude.<div class="field-ex">Example: <code>-84.388</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>country</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">ISO 3166-1 alpha-2 country code derived from GPS or IP.<div class="constraints">pattern: <code>^[A-Z]{2}$</code></div><div class="field-ex">Example: <code>US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>region</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">State / province / region code.<div class="field-ex">Example: <code>GA</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>city</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>Atlanta</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>postal_code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Used for precise tax jurisdiction resolution.<div class="field-ex">Example: <code>30301</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>ip_address</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">IPv4 or IPv6 of the requesting client.<div class="field-ex">Example: <code>203.0.113.42</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>ip_country</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Country resolved from IP geolocation. May differ from GPS country — mismatch is a risk signal.<div class="constraints">pattern: <code>^[A-Z]{2}$</code></div><div class="field-ex">Example: <code>US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_vpn</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as a known VPN exit node.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_proxy</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as an open or commercial proxy.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_tor</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">IP identified as a Tor exit node.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-DeviceContext" class="section-heading h3">DeviceContext<a class="anchor" href="#schema-DeviceContext">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>device_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Stable per-device ID. Must be consistent across the session — mismatch between create and complete triggers a security alert.<div class="field-ex">Example: <code>dev_a1b2c3d4e5f6</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>device_type</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">mobile</code> <code class="ev">tablet</code> <code class="ev">desktop</code> <code class="ev">wearable</code> <code class="ev">tv</code> <code class="ev">server</code> <code class="ev">iot</code> <code class="ev">unknown</code></div><div class="field-ex">Example: <code>mobile</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>os</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>iOS</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>os_version</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>18.2</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>app_version</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Version of the agent app or runtime.<div class="field-ex">Example: <code>4.1.0</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>user_agent</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Full User-Agent string.<div class="field-ex">Example: <code>FCPAgent/4.1.0 (iOS 18.2; iPhone)</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>fingerprint</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Hardware/software hash for cross-session fraud correlation.<div class="field-ex">Example: <code>fp_7f8e9d0a1b2c3d4e</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_emulator</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">Device is a software emulator — associated with automated fraud tooling.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_rooted</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">OS has been rooted or jailbroken — weakened key storage, elevated risk.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>screen_resolution</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">WxH pixels (mobile/desktop only).<div class="field-ex">Example: <code>390x844</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>language</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Device/app locale.<div class="field-ex">Example: <code>en-US</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>timezone</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">IANA timezone.<div class="field-ex">Example: <code>America/New_York</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-RiskContext" class="section-heading h3">RiskContext<a class="anchor" href="#schema-RiskContext">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_age_seconds</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Active session duration in seconds. Very short + high-value order = automated fraud pattern.<div class="field-ex">Example: <code>142</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>is_new_device</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">First-seen device_id for this user.<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>previous_orders_count</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Total historical orders by this user at this merchant.<div class="field-ex">Example: <code>7</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>account_age_days</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Age of the user account at this merchant in days.<div class="field-ex">Example: <code>412</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>velocity_last_1h</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Checkout attempts in the last 1 hour.<div class="field-ex">Example: <code>1</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>velocity_last_24h</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Checkout attempts in the last 24 hours.<div class="field-ex">Example: <code>2</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>risk_score</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Composite score 0–100. 0 = no risk, 100 = max risk. Merchant configures thresholds: e.g. >70 = SCA required, >90 = reject.<div class="constraints">min: 0  ·  max: 100</div><div class="field-ex">Example: <code>12</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>risk_signals</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<string></span></td>
+          <td class="fd">Discrete flags contributing to risk_score. Empty array means no signals triggered.<div class="field-ex">Example: <code>[]</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>three_ds_exemption_claimed</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-null">nullable</span></td>
+          <td class="fd">PSD2 3DS exemption reason if claimed. Null = no exemption, SCA proceeds normally.<div class="enum-vals"><code class="ev">low_value</code> <code class="ev">trusted_beneficiary</code> <code class="ev">recurring_transaction</code> <code class="ev">corporate_payment</code> <code class="ev">low_risk_analysis</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-IntentMandate" class="section-heading h3">IntentMandate<a class="anchor" href="#schema-IntentMandate">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>im_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_by</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">DID of the signing key<div class="field-ex">Example: <code>did:key:zAgent123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>constraints</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>issued_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-CartMandateIssued" class="section-heading h3">CartMandateIssued<a class="anchor" href="#schema-CartMandateIssued">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>cm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>session_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Inside the merchant's signature. Binds this mandate to the session.
+When the agent submits this mandate in complete, the merchant
+extracts and verifies session_id from the signed payload — not
+just from the URL.
+<div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>intent_mandate_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>im_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>merch_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>line_item_snapshot</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<LineItemResolved></span></td>
+          <td class="fd">Immutable cart snapshot at mandate issuance time</td>
+        </tr><tr>
+          <td class="fn"><code>grand_total</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">The exact amount that will be charged<div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>USD</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">JWS over the full CartMandate payload<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.merchant...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>issued_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>expires_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_snapshot</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd">Discounts locked into this mandate at issuance — immutable once signed.</td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-CartMandateSigned" class="section-heading h3">CartMandateSigned<a class="anchor" href="#schema-CartMandateSigned">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>mandate_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>cm_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>session_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Must match the URL session_id. Verified inside the merchant
+signature — cannot be altered without breaking the signature.
+<div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_signature</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Unchanged from CartMandateIssued<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.merchant...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>user_counter_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">User's JWS counter-signature (human_present)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.user...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>agent_auto_signature</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Agent JWS auto-sig (human_not_present, within IntentMandate bounds)<div class="field-ex">Example: <code>eyJhbGciOiJFUzI1NiJ9.agent...</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>signed_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-DiscountInput" class="section-heading h3">DiscountInput<a class="anchor" href="#schema-DiscountInput">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>type</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">PROMO_CODE: user-entered code — requires code field
+AUTOMATIC: merchant rule — no input needed
+LOYALTY_REDEMPTION: points redemption — requires loyalty.redeem_points
+AGENT_OFFER: personalised offer — requires offer_id
+BUNDLE: bundle pricing — merchant applies automatically<div class="enum-vals"><code class="ev">PROMO_CODE</code> <code class="ev">AUTOMATIC</code> <code class="ev">LOYALTY_REDEMPTION</code> <code class="ev">AGENT_OFFER</code> <code class="ev">BUNDLE</code></div><div class="field-ex">Example: <code>PROMO_CODE</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Required for PROMO_CODE.<div class="field-ex">Example: <code>SUMMER15</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>offer_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Required for AGENT_OFFER.<div class="field-ex">Example: <code>offer_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_points</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Points being redeemed — informational for LOYALTY_REDEMPTION.<div class="field-ex">Example: <code>1000</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-AppliedDiscount" class="section-heading h3">AppliedDiscount<a class="anchor" href="#schema-AppliedDiscount">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>discount_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Server-assigned ID for this discount instance.<div class="field-ex">Example: <code>disc_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>type</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">PROMO_CODE</code> <code class="ev">AUTOMATIC</code> <code class="ev">LOYALTY_REDEMPTION</code> <code class="ev">AGENT_OFFER</code> <code class="ev">BUNDLE</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>code</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Code used (PROMO_CODE only).<div class="field-ex">Example: <code>SUMMER15</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>description</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Human-readable label for display.<div class="field-ex">Example: <code>Summer Sale — 15% off</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>applies_to</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">order</code> <code class="ev">line_item</code> <code class="ev">shipping</code></div><div class="field-ex">Example: <code>order</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>value_type</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">percentage</code> <code class="ev">fixed_amount</code> <code class="ev">free_shipping</code></div><div class="field-ex">Example: <code>percentage</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>value</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">Percentage or fixed amount.<div class="field-ex">Example: <code>15</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>amount_saved</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd">Actual dollar amount deducted.<div class="field-ex">Example: <code>15.9</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>stackable</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>True</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_points_redeemed</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Points consumed (LOYALTY_REDEMPTION only).<div class="field-ex">Example: <code>1000</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-LoyaltyCheckoutInput" class="section-heading h3">LoyaltyCheckoutInput<a class="anchor" href="#schema-LoyaltyCheckoutInput">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>account_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd">Loyalty account to attach to this session.<div class="field-ex">Example: <code>loyalty_jane_001</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>redeem_points</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">integer</span></td>
+          <td class="fd">Points to redeem. Must be >= min_redemption_points. Converted to a LOYALTY_REDEMPTION discount entry.<div class="constraints">min: 0</div><div class="field-ex">Example: <code>1000</code></div></td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-CheckoutSession" class="section-heading h3">CheckoutSession<a class="anchor" href="#schema-CheckoutSession">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_id</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>fcp_sess_a1b2c3d4e5f6g7h8</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>status</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">SessionStatus</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>mode</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">CheckoutMode</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>merchant_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>merch_abc123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>line_items</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<LineItemResolved></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>buyer</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">Buyer</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>totals</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">Totals</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_applied</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>cart_mandate</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">CartMandateIssued</span></td>
+          <td class="fd">Current merchant-signed CartMandate. Contains grand_total and
+session_id inside the signed payload. The agent presents this to
+the user for review and counter-signature before calling complete.
+</td>
+        </tr><tr>
+          <td class="fn"><code>cart_mandate_invalidated</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">boolean</span></td>
+          <td class="fd">True when a previous CartMandate was voided by this update.
+Agent must re-collect the user's counter-signature.
+<div class="field-ex">Example: <code>False</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>available_payment_handlers</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<PaymentHandlerSummary></span></td>
+          <td class="fd">Handlers available for this session. Present these to the user
+after showing the CartMandate (so they know the final price before
+selecting a payment method). The selected handler's `id` goes into
+CompleteCheckoutRequest.payment_handler_id.
+</td>
+        </tr><tr>
+          <td class="fn"><code>mandate_chain</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">MandateChainSummary</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>available_actions</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<string></span></td>
+          <td class="fd">Actions the agent may take from this state<div class="field-ex">Example: <code>['update', 'cancel', 'complete']</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>metadata</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>created_at</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>updated_at</code><span class="badge-req">required</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>expires_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd">15 min for human_present; 24 hr for human_not_present</td>
+        </tr><tr>
+          <td class="fn"><code>discounts_rejected</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<object></span></td>
+          <td class="fd">Discounts submitted but not applied (invalid code, expired, non-stackable). Session still created.</td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_session</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd">Loyalty state for this session (present when loyalty account attached).</td>
+        </tr><tr>
+          <td class="fn"><code>risk_decision</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">object</span></td>
+          <td class="fd">Merchant's risk assessment of this session (informational).</td>
+        </tr></tbody>
+    </table>
+
+<h3 id="schema-CompleteResponse" class="section-heading h3">CompleteResponse<a class="anchor" href="#schema-CompleteResponse">¶</a></h3>
+<table class="field-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Description &amp; Constraints</th></tr></thead>
+      <tbody><tr>
+          <td class="fn"><code>session_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>status</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="enum-vals"><code class="ev">completed</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>order_id</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>ord_20260324_00123</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>completed_at</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">date-time</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>grand_total</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">number</span> <span class="badge-fmt">double</span></td>
+          <td class="fd"><div class="field-ex">Example: <code>94.98</code></div></td>
+        </tr><tr>
+          <td class="fn"><code>currency</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>settlement</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">SettlementRecord</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>mandate_chain</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">MandateChainSummary</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>receipt_url</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">string</span> <span class="badge-fmt">uri</span></td>
+          <td class="fd"></td>
+        </tr><tr>
+          <td class="fn"><code>discounts_applied</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">array<AppliedDiscount></span></td>
+          <td class="fd">Discounts that were applied on this completed order.</td>
+        </tr><tr>
+          <td class="fn"><code>loyalty_result</code><span class="badge-opt">optional</span></td>
+          <td class="ft"><span class="type-tag">LoyaltyCheckoutResult</span></td>
+          <td class="fd">Present when loyalty account was attached to session.</td>
+        </tr></tbody>
+    </table>
+</div>
+  </main>
+</div>
+
+<script>
+function switchTab(btn, id) {
+  var bar = btn.closest('.tab-bar');
+  var content = btn.closest('.tabs').querySelector('.tab-content');
+  bar.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  content.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
+  btn.classList.add('active');
+  var pane = content.querySelector('#' + id);
+  if (pane) pane.classList.add('active');
+}
+// Sidebar active link on scroll
+window.addEventListener('scroll', function() {
+  var sections = document.querySelectorAll('[id]');
+  var scrollY = window.pageYOffset + 80;
+  var current = '';
+  sections.forEach(function(s) { if (s.offsetTop <= scrollY) current = s.id; });
+  document.querySelectorAll('.nav-link').forEach(function(l) {
+    l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+  });
+}, {passive: true});
+</script>
+</body>
+</html>

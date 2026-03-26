@@ -1,0 +1,757 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FCP API Documentation &mdash; Federated Commerce Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c10;--bg2:#0f1218;--bg3:#141820;--bg4:#1a2030;--border:#1e2535;--border2:#252d3d;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--accent:#3b82f6;--accent2:#1d4ed8;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--nav-w:280px;--header-h:60px;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;min-height:100vh;font-size:14px;line-height:1.6}
+.top-bar{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--header-h);background:rgba(15,18,24,.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;backdrop-filter:blur(12px)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px}
+.version-pill{background:var(--accent2);color:#93c5fd;padding:2px 10px;border-radius:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500}
+.header-desc{font-size:12px;color:var(--text3);flex-shrink:0}
+.tag-filters{display:flex;gap:5px;margin-left:8px}
+.tag-btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);padding:4px 11px;border-radius:20px;font-size:11px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
+.tag-btn:hover,.tag-btn.active{background:var(--accent2);border-color:var(--accent);color:#93c5fd}
+.search-wrap{margin-left:auto;position:relative}
+.search-input{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 12px 6px 32px;border-radius:6px;font-size:13px;width:210px;font-family:'DM Sans',sans-serif;transition:border-color .2s}
+.search-input:focus{outline:none;border-color:var(--accent)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.layout{display:flex;margin-top:var(--header-h);flex:1}
+.sidebar{width:var(--nav-w);flex-shrink:0;position:fixed;top:var(--header-h);bottom:0;left:0;overflow-y:auto;background:var(--bg2);border-right:1px solid var(--border);padding:16px 0 40px}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.nav-group{padding:0 0 12px}
+.nav-group-label{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);padding:8px 20px 5px;display:block}
+.nav-link{display:flex;align-items:center;gap:8px;padding:5px 20px;text-decoration:none;color:var(--text2);font-size:12px;transition:all .15s;border-left:2px solid transparent}
+.nav-link:hover{color:var(--text);background:var(--bg3);border-left-color:var(--accent)}
+.nav-link.active{color:#93c5fd;background:#1e3a5f30;border-left-color:var(--accent)}
+.nav-method{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;width:42px;flex-shrink:0}
+.nav-path{font-family:'IBM Plex Mono',monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schema-link .nav-path{color:var(--text3)}
+.main{margin-left:var(--nav-w);flex:1;padding:32px 48px 80px;max-width:960px}
+.hero{padding:36px 0 44px;border-bottom:1px solid var(--border);margin-bottom:36px}
+.hero-title{font-family:'Syne',sans-serif;font-weight:800;font-size:34px;letter-spacing:-1px;line-height:1.1;background:linear-gradient(135deg,#e2e8f0,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.hero-sub{font-size:15px;color:var(--text2);margin-bottom:20px}
+.hero-meta{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.meta-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)}
+.meta-item code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px}
+.server-badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:11px}
+.server-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.section-title{font-family:'Syne',sans-serif;font-weight:700;font-size:20px;letter-spacing:-.5px;margin-bottom:16px;padding-top:8px;color:var(--text);display:flex;align-items:center;gap:10px}
+.section-title::before{content:'';display:block;width:3px;height:20px;background:var(--accent);border-radius:2px}
+.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px}
+.ov-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.ov-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+.ov-value{font-size:13px;color:var(--text2);line-height:1.7}
+.ov-value code{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--bg4);padding:1px 5px;border-radius:3px;color:var(--text)}
+.phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px}
+.phase-card{background:var(--bg2);border-radius:10px;padding:20px;border:1px solid var(--border)}
+.phase-num{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px}
+.phase-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px}
+.phase-path{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--bg4);padding:4px 10px;border-radius:4px;color:var(--text2);display:inline-block;margin-bottom:10px}
+.phase-desc{font-size:12px;color:var(--text3);line-height:1.6}
+.lifecycle-box{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:24px 28px;margin-bottom:32px}
+.lifecycle-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px}
+.lifecycle-flow{display:flex;align-items:center;flex-wrap:wrap}
+.lf-step{background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:6px 14px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--text2)}
+.lf-arrow{color:var(--text3);padding:0 8px;font-size:14px}
+.state-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:18px}
+.state-item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)}
+.state-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.state-name{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:var(--text);margin-bottom:2px}
+.state-desc{font-size:11px;color:var(--text3)}
+.security-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:40px}
+.sec-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.sec-header{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:4px}
+.sec-req{font-size:10px;color:var(--red)}
+.sec-desc{font-size:12px;color:var(--text3);margin-top:4px}
+.endpoint-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;transition:border-color .2s;overflow:hidden}
+.endpoint-card:hover{border-color:var(--border2)}
+.endpoint-card.open{border-color:var(--accent)}
+.endpoint-header{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;cursor:pointer;transition:background .15s}
+.endpoint-header:hover{background:var(--bg3)}
+.endpoint-title{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.method-badge{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;padding:3px 8px;border-radius:5px;flex-shrink:0;letter-spacing:.05em}
+.endpoint-path{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text);flex-shrink:0}
+.endpoint-summary{font-size:13px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.endpoint-meta{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.tag-chip{font-size:11px;color:var(--text3);background:var(--bg4);border:1px solid var(--border2);padding:2px 8px;border-radius:20px}
+.chevron{color:var(--text3);font-size:12px;transition:transform .2s}
+.endpoint-card.open .chevron{transform:rotate(180deg)}
+.endpoint-body{display:none;padding:0 20px 20px;border-top:1px solid var(--border)}
+.endpoint-card.open .endpoint-body{display:block}
+.ep-desc{font-size:13px;color:var(--text2);line-height:1.7;padding:14px 0 8px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.section-block{margin-top:18px}
+.block-title{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+.props-table{width:100%;border-collapse:collapse;font-size:13px}
+.props-table th{text-align:left;font-size:10px;font-weight:500;color:var(--text3);padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg3);font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;text-transform:uppercase}
+.props-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text2)}
+.props-table tr:last-child td{border-bottom:none}
+.props-table tr:hover td{background:var(--bg3)}
+.prop-name{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#93c5fd;background:#1e3a5f40;padding:1px 6px;border-radius:4px}
+.type-chip{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a78bfa;background:#2e1065;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.req-badge{font-size:10px;color:#f87171;background:#450a0a;border:1px solid #7f1d1d;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;font-family:'IBM Plex Mono',monospace;letter-spacing:.05em}
+.opt-badge{font-size:10px;color:var(--text3);padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;font-family:'IBM Plex Mono',monospace}
+.enum-list{margin-top:5px;display:flex;flex-wrap:wrap;gap:4px}
+.enum-val{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--bg4);border:1px solid var(--border2);color:var(--amber);padding:1px 5px;border-radius:3px}
+.ex-val{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green);margin-left:6px}
+.param-loc{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;letter-spacing:.05em}
+.status-code{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;border:1px solid;padding:2px 8px;border-radius:4px}
+.no-props{color:var(--text3);font-size:13px;font-style:italic}
+.ex-tabs{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+.ex-tab{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px 11px;border-radius:4px;cursor:pointer;background:var(--bg3);border:1px solid var(--border2);color:var(--text3);transition:all .15s}
+.ex-tab.active,.ex-tab:hover{background:var(--accent2);border-color:var(--accent);color:#93c5fd}
+.ex-panel{display:none}
+.ex-panel.active{display:block}
+.code-block{background:#060810;border:1px solid var(--border);border-radius:8px;padding:16px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a3e635;line-height:1.7;overflow-x:auto;white-space:pre;max-height:420px;overflow-y:auto}
+.code-block::-webkit-scrollbar{height:4px;width:4px}
+.code-block::-webkit-scrollbar-thumb{background:var(--border2)}
+.schema-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.schema-header{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;transition:background .15s}
+.schema-header:hover{background:var(--bg3)}
+.schema-name{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#a78bfa;font-weight:500;flex-shrink:0}
+.schema-desc{font-size:12px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schema-body{display:none;padding:0 20px 16px;border-top:1px solid var(--border)}
+.schema-card.open .schema-body{display:block}
+.schema-card.open .chevron{transform:rotate(180deg)}
+.hidden{display:none!important}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head><body>
+<header class="top-bar">
+  <div class="logo">FCP</div>
+  <span class="version-pill">v1.0.0</span>
+  <span class="header-desc">Federated Commerce Protocol</span>
+  <div class="tag-filters">
+    <button class="tag-btn active" onclick="filterTag('all',this)">All</button>
+    <button class="tag-btn" onclick="filterTag('Discovery',this)">Discovery</button><button class="tag-btn" onclick="filterTag('Checkout',this)">Checkout</button><button class="tag-btn" onclick="filterTag('Mandates',this)">Mandates</button>
+    <button class="tag-btn" onclick="filterTag('Schemas',this)">Schemas</button>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">&#9906;</span>
+    <input class="search-input" type="text" placeholder="Search endpoints&hellip;" oninput="searchDocs(this.value)">
+  </div>
+</header>
+<div class="layout">
+<nav class="sidebar">
+  <a href="#overview" class="nav-link" style="padding:10px 20px 14px;font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--text2)">Overview</a>
+  <div class="nav-group"><span class="nav-group-label">Discovery</span><a href="#getMerchantProfile" class="nav-link"><span class="nav-method" style="color:#10b981">GET</span><span class="nav-path">/.well-known/fcp</span></a></div><div class="nav-group"><span class="nav-group-label">Checkout</span><a href="#createCheckout" class="nav-link"><span class="nav-method" style="color:#3b82f6">POST</span><span class="nav-path">/v1/checkouts</span></a><a href="#getCheckout" class="nav-link"><span class="nav-method" style="color:#10b981">GET</span><span class="nav-path">/v1/checkouts/{id}</span></a><a href="#updateCheckout" class="nav-link"><span class="nav-method" style="color:#f59e0b">PATCH</span><span class="nav-path">/v1/checkouts/{id}</span></a><a href="#cancelCheckout" class="nav-link"><span class="nav-method" style="color:#3b82f6">POST</span><span class="nav-path">/v1/checkouts/{id}/cancel</span></a><a href="#completeCheckout" class="nav-link"><span class="nav-method" style="color:#3b82f6">POST</span><span class="nav-path">/v1/checkouts/{id}/complete</span></a></div><div class="nav-group"><span class="nav-group-label">Mandates</span><a href="#verifyMandate" class="nav-link"><span class="nav-method" style="color:#3b82f6">POST</span><span class="nav-path">/v1/mandates/verify</span></a></div><div class="nav-group"><span class="nav-group-label">Schemas</span><a href="#schema-ClientContext" class="nav-link schema-link"><span class="nav-path">ClientContext</span></a><a href="#schema-LocationContext" class="nav-link schema-link"><span class="nav-path">LocationContext</span></a><a href="#schema-DeviceContext" class="nav-link schema-link"><span class="nav-path">DeviceContext</span></a><a href="#schema-RiskContext" class="nav-link schema-link"><span class="nav-path">RiskContext</span></a><a href="#schema-IntentMandate" class="nav-link schema-link"><span class="nav-path">IntentMandate</span></a><a href="#schema-CartMandateIssued" class="nav-link schema-link"><span class="nav-path">CartMandateIssued</span></a><a href="#schema-CartMandateSigned" class="nav-link schema-link"><span class="nav-path">CartMandateSigned</span></a><a href="#schema-CheckoutSession" class="nav-link schema-link"><span class="nav-path">CheckoutSession</span></a><a href="#schema-CompleteResponse" class="nav-link schema-link"><span class="nav-path">CompleteResponse</span></a><a href="#schema-DiscountInput" class="nav-link schema-link"><span class="nav-path">DiscountInput</span></a><a href="#schema-AppliedDiscount" class="nav-link schema-link"><span class="nav-path">AppliedDiscount</span></a><a href="#schema-LoyaltyCheckoutInput" class="nav-link schema-link"><span class="nav-path">LoyaltyCheckoutInput</span></a><a href="#schema-LoyaltyCheckoutResult" class="nav-link schema-link"><span class="nav-path">LoyaltyCheckoutResult</span></a><a href="#schema-MandateChainSummary" class="nav-link schema-link"><span class="nav-path">MandateChainSummary</span></a></div>
+</nav>
+<main class="main">
+<div class="hero" id="overview">
+  <div class="hero-title">Federated Commerce Protocol</div>
+  <div class="hero-sub">Open, vendor-neutral API for the full lifecycle of agentic commerce</div>
+  <div class="hero-meta">
+    <div class="meta-item">License <code>Apache 2.0</code></div>
+    <div class="meta-item">Version <code>1.0.0</code></div>
+    <div class="meta-item">Auth <code>OAuth 2.0 Bearer</code></div>
+    <div class="server-badge"><span class="server-dot"></span><code style="background:none;padding:0;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2)">https://api.merchant.example/.well-known/fcp/v1</code><span style="font-size:11px;color:var(--text3);margin-left:4px">Production</span></div><div class="server-badge"><span class="server-dot"></span><code style="background:none;padding:0;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2)">https://sandbox.merchant.example/.well-known/fcp/v1</code><span style="font-size:11px;color:var(--text3);margin-left:4px">Sandbox</span></div>
+  </div>
+</div>
+<div class="overview-grid">
+  <div class="ov-card">
+    <div class="ov-label">Endpoints</div>
+    <div style="font-size:28px;font-family:'Syne',sans-serif;font-weight:700;color:var(--text);margin-bottom:4px">7</div>
+    <div class="ov-value">6 paths &middot; 3 tags</div>
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Protocol Actors</div>
+    <div class="ov-value"><code>Consumer Agent</code> <code>Merchant</code><br><code>Credential Provider</code> <code>PSP</code></div>
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Key Headers</div>
+    <div class="ov-value"><code>FCP-Agent</code> <code>FCP-Version</code><br><code>FCP-Idempotency-Key</code><br><code>FCP-Client-Context</code></div>
+  </div>
+</div>
+<div class="phase-grid">
+  <div class="phase-card" style="border-color:#1e3a5f">
+    <div class="phase-num" style="color:#3b82f6">Phase 1</div>
+    <div class="phase-title" style="color:#93c5fd">What to Buy</div>
+    <div class="phase-path">POST /v1/checkouts</div>
+    <div class="phase-desc">Submit cart intent &mdash; items, buyer, discounts, loyalty, and the signed IntentMandate. No payment info. Merchant computes totals and returns a signed CartMandate with the locked <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">grand_total</code>.</div>
+  </div>
+  <div class="phase-card" style="border-color:#064e3b">
+    <div class="phase-num" style="color:#10b981">Phase 2</div>
+    <div class="phase-title" style="color:#6ee7b7">Authorise &amp; Fire</div>
+    <div class="phase-path">POST /v1/checkouts/{id}/complete</div>
+    <div class="phase-desc">Submit signed CartMandate + payment handler reference + <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">confirm_total</code>. Merchant verifies chain, resolves token CP&rarr;PSP server-to-server. Agent never touches the token.</div>
+  </div>
+</div>
+<div class="lifecycle-box">
+  <div class="lifecycle-title">Session Lifecycle</div>
+  <div class="lifecycle-flow">
+    <div class="lf-step">DISCOVER</div><span class="lf-arrow">&rarr;</span>
+    <div class="lf-step">CREATE</div><span class="lf-arrow">&rarr;</span>
+    <div class="lf-step">GET / PATCH</div><span class="lf-arrow">&rarr;</span>
+    <div class="lf-step" style="border-color:#10b98150;color:#10b981">COMPLETE</div>
+    <span class="lf-arrow" style="color:#475569"> or </span>
+    <div class="lf-step" style="border-color:#ef444450;color:#f87171">CANCEL</div>
+  </div>
+  <div class="state-grid">
+    <div class="state-item"><div class="state-dot" style="background:#f59e0b"></div><div><div class="state-name">pending_mandate</div><div class="state-desc">CartMandate issued. User reviewing and counter-signing.</div></div></div>
+    <div class="state-item"><div class="state-dot" style="background:#3b82f6"></div><div><div class="state-name">ready</div><div class="state-desc">Mandate signed. Safe to call complete.</div></div></div>
+    <div class="state-item"><div class="state-dot" style="background:#10b981"></div><div><div class="state-name">completed</div><div class="state-desc">Payment captured. Order created. Terminal.</div></div></div>
+    <div class="state-item"><div class="state-dot" style="background:#ef4444"></div><div><div class="state-name">cancelled</div><div class="state-desc">Terminated before completion. Mandate voided. Terminal.</div></div></div>
+    <div class="state-item"><div class="state-dot" style="background:#64748b"></div><div><div class="state-name">expired</div><div class="state-desc">TTL: 15 min (human_present) &middot; 24 hr (autonomous).</div></div></div>
+  </div>
+</div>
+<div class="section-title" style="margin-bottom:14px">Transport Headers</div>
+<div class="security-grid">
+  <div class="sec-card"><div class="sec-header">FCP-Agent <span class="sec-req">required &middot; all</span></div><div class="sec-desc">Agent capability profile URI. <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">profile="&lt;uri&gt;"</code></div></div>
+  <div class="sec-card"><div class="sec-header">FCP-Version <span class="sec-req">required &middot; all</span></div><div class="sec-desc">Protocol version, e.g. <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">1.0</code></div></div>
+  <div class="sec-card"><div class="sec-header">FCP-Idempotency-Key <span class="sec-req">required &middot; POST</span></div><div class="sec-desc">UUID. Prevents duplicate sessions and double-charge on complete.</div></div>
+  <div class="sec-card"><div class="sec-header">FCP-Client-Context <span class="sec-req">required &middot; GET</span></div><div class="sec-desc">base64url JSON <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">ClientContext</code> (location + device + risk). Use body field on POST/PATCH.</div></div>
+  <div class="sec-card"><div class="sec-header">Authorization <span class="sec-req">required &middot; all</span></div><div class="sec-desc"><code style="font-family:'IBM Plex Mono',monospace;font-size:10px">Bearer &lt;token&gt;</code> &mdash; OAuth 2.0 scope: <code style="font-family:'IBM Plex Mono',monospace;font-size:10px">fcp.checkout</code></div></div>
+</div>
+<div class="section-title" id="endpoints-section">Endpoints</div><div id="endpoints-container">
+<div class="endpoint-card" id="getMerchantProfile" data-tag="Discovery">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#064e3b;color:#10b981;border:1px solid #10b98130">GET</span><code class="endpoint-path">/.well-known/fcp</code><span class="endpoint-summary">Fetch merchant capability profile</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Discovery</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Returns the merchant's capability profile. Agents fetch this before any<br>session. The `payment_handlers` list is what the agent presents to the<br>user when they need to select a payment method — this happens client-side<br>between CREATE and COMPLETE. No extra API call needed.<br></p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">FCP-Client-Context</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td>base64url-encoded JSON ClientContext. Required on all GET requests.
+On POST/PATCH requests include client_context in the request body instead.</td></tr></tbody></table></div>
+    
+    
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Merchant capability profile &rarr; <code class="prop-name">MerchantProfile</code></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="createCheckout" data-tag="Checkout">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f630">POST</span><code class="endpoint-path">/v1/checkouts</code><span class="endpoint-summary">Create a checkout session</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Checkout</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Step 1 — WHAT TO BUY.<br><br>Submits cart intent: items, buyer, and the user-signed IntentMandate.<br>No payment information. The grand_total is unknown until the merchant<br>computes tax, shipping, and discounts server-side.<br><br>The merchant responds with a CartMandate — a merchant-signed document<br>containing the session_id, exact items, and grand_total. The agent<br>presents this to the user, who:<br>1. Sees the final price<br>2. Picks a payment handler from the merchant profile list (client-side)<br>3. Counter-signs the CartMandate (biometric / PIN on device)<br><br>Then the agent calls complete.<br><br>**Idempotency key required</p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">FCP-Idempotency-Key</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td>UUID. Required on all POST requests.</td></tr><tr><td><code class="prop-name">FCP-Agent</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Version</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Body &mdash; <code class="prop-name">CreateCheckoutRequest</code></h4><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">mode</code><span class="req-badge">required</span></td><td><span class="type-chip">CheckoutMode</span></td><td></td></tr><tr><td><code class="prop-name">line_items</code><span class="req-badge">required</span></td><td><span class="type-chip">array<LineItemInput></span></td><td></td></tr><tr><td><code class="prop-name">buyer</code><span class="req-badge">required</span></td><td><span class="type-chip">Buyer</span></td><td></td></tr><tr><td><code class="prop-name">discounts</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<DiscountInput></span></td><td>Discounts to attempt to apply at session creation.</td></tr><tr><td><code class="prop-name">intent_mandate</code><span class="req-badge">required</span></td><td><span class="type-chip">IntentMandate</span></td><td></td></tr><tr><td><code class="prop-name">metadata</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">client_context</code><span class="req-badge">required</span></td><td><span class="type-chip">ClientContext</span></td><td></td></tr><tr><td><code class="prop-name">loyalty</code><span class="opt-badge">opt</span></td><td><span class="type-chip">LoyaltyCheckoutInput</span></td><td>Loyalty redemption for this checkout. Optional.</td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Examples</h4><div class="ex-tabs"><button class="ex-tab active" onclick="switchEx(this,'ex_human_present_loyalty_discount')">Human-present with loyalty redemption </button><button class="ex-tab " onclick="switchEx(this,'ex_autonomous')">Autonomous agent — human_not_present w</button></div><div class="ex-panels"><div class="ex-panel active" id="ex_human_present_loyalty_discount"><pre class="code-block">{
+  "mode": "human_present",
+  "line_items": [
+    {
+      "catalog_id": "item_headphones_pro",
+      "quantity": 1
+    },
+    {
+      "catalog_id": "item_usbc_cable",
+      "quantity": 2
+    }
+  ],
+  "buyer": {
+    "email": "jane@example.com",
+    "shipping_address": {
+      "name": "Jane Doe",
+      "line1": "123 Main St",
+      "city": "Atlanta",
+      "state": "GA",
+      "postal_code": "30301",
+      "country": "US"
+    }
+  },
+  "discounts": [
+    {
+      "type": "PROMO_CODE",
+      "code": "SUMMER15"
+    },
+    {
+      "type": "LOYALTY_REDEMPTION",
+      "loyalty_points": 1000
+    }
+  ],
+  "loyalty": {
+    "account_id": "loyalty_jane_001",
+    "redeem_points": 1000
+  },
+  "intent_mandate": {
+    "mandate_id": "im_001",
+    "signed_by": "did:key:zAgent123",
+    "constraints": {
+      "max_amount": 300.0,
+      "currency": "USD",
+      "expires_at": "2026-03-24T11:00:00Z"
+    },
+    "signature": "eyJhbGciOiJFUzI1NiJ9..."
+  },
+  "client_context": {
+    "location": {
+      "latitude": 33.749,
+      "longitude": -84.388,
+      "country": "US",
+      "region": "GA",
+      "city": "Atlanta",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.42",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "os": "iOS",
+      "os_version": "18.2",
+      "app_version": "4.1.0",
+      "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+      "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+      "is_emulator": false,
+      "is_rooted": false,
+      "screen_resolution": "390x844",
+      "language": "en-US",
+      "timezone": "America/New_York"
+    },
+    "risk": {
+      "session_age_seconds": 142,
+      "is_new_device": false,
+      "previous_orders_count": 7,
+      "account_age_days": 412,
+      "velocity_last_1h": 1,
+      "velocity_last_24h": 2,
+      "risk_score": 12,
+      "risk_signals": []
+    }
+  }
+}</pre></div><div class="ex-panel " id="ex_autonomous"><pre class="code-block">{
+  "mode": "human_not_present",
+  "line_items": [
+    {
+      "catalog_id": "item_coffee_subscription",
+      "quantity": 1
+    }
+  ],
+  "buyer": {
+    "email": "jane@example.com",
+    "shipping_address": {
+      "name": "Jane Doe",
+      "line1": "123 Main St",
+      "city": "Atlanta",
+      "state": "GA",
+      "postal_code": "30301",
+      "country": "US"
+    }
+  },
+  "intent_mandate": {
+    "mandate_id": "im_auto_007",
+    "signed_by": "did:key:zAgent123",
+    "constraints": {
+      "max_amount": 50.0,
+      "currency": "USD",
+      "merchant_id": "merch_abc123",
+      "recurrence": "monthly",
+      "expires_at": "2027-01-01T00:00:00Z"
+    },
+    "signature": "eyJhbGciOiJFUzI1NiJ9..."
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "region": "GA",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.88",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_agent_headless_001",
+      "device_type": "server",
+      "os": "Linux",
+      "os_version": "6.1",
+      "app_version": "agent_runtime_2.0",
+      "user_agent": "FCPAgent/2.0 (headless; Linux)",
+      "is_emulator": false,
+      "is_rooted": false
+    },
+    "risk": {
+      "session_age_seconds": 0,
+      "is_new_device": false,
+      "previous_orders_count": 12,
+      "account_age_days": 730,
+      "velocity_last_1h": 0,
+      "velocity_last_24h": 1,
+      "risk_score": 5,
+      "risk_signals": []
+    }
+  }
+}</pre></div></div></div>
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">201</span></td><td>Session created. CartMandate issued with computed grand_total.
+Status: `pending_mandate`.
+Agent should now present the CartMandate to the user for review,
+handler selection, and counter-signature, then call complete.
+ &rarr; <code class="prop-name">CheckoutSession</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">400</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">401</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">409</span></td><td>Duplicate idempotency key &rarr; <code class="prop-name">ErrorResponse</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">422</span></td><td></td></tr><tr><td><span class="status-code" style="color:#ef4444;border-color:#ef444440">500</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">451</span></td><td>Geo-restricted — merchant cannot sell to location in client_context &rarr; <code class="prop-name">ErrorResponse</code></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="getCheckout" data-tag="Checkout">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#064e3b;color:#10b981;border:1px solid #10b98130">GET</span><code class="endpoint-path">/v1/checkouts/{session_id}</code><span class="endpoint-summary">Retrieve a checkout session</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Checkout</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Returns current session state. Recommended: call GET immediately before<br>complete to confirm the CartMandate hasn't been invalidated by a<br>merchant-side change (inventory drop, pricing update).<br><br>The response always includes the current CartMandate and<br>`available_payment_handlers` so the agent can re-render the payment<br>selection UI if needed without refetching the merchant profile.<br></p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#0891b220;color:#0891b2">path</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Agent</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Version</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Client-Context</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td>base64url-encoded JSON ClientContext. Required on all GET requests.
+On POST/PATCH requests include client_context in the request body instead.</td></tr></tbody></table></div>
+    
+    
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Current session state &rarr; <code class="prop-name">CheckoutSession</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">401</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">404</span></td><td></td></tr><tr><td><span class="status-code" style="color:#ef4444;border-color:#ef444440">500</span></td><td></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="updateCheckout" data-tag="Checkout">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#451a03;color:#f59e0b;border:1px solid #f59e0b30">PATCH</span><code class="endpoint-path">/v1/checkouts/{session_id}</code><span class="endpoint-summary">Update cart or buyer details</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Checkout</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Modifies an active session. Any change that affects pricing (add/remove<br>items, discount, shipping address to a different tax zone) invalidates<br>the current CartMandate and triggers a new one — the agent must<br>re-collect the user's counter-signature before completing.<br><br>Non-price changes (buyer email, phone, metadata) do not invalidate<br>the CartMandate.<br><br>Not accepted: `payment_handler_id` — that is submitted at complete.<br></p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#0891b220;color:#0891b2">path</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Idempotency-Key</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td>UUID. Required on all POST requests.</td></tr><tr><td><code class="prop-name">FCP-Agent</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Version</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Body &mdash; <code class="prop-name">UpdateCheckoutRequest</code></h4><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">line_items</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">buyer</code><span class="opt-badge">opt</span></td><td><span class="type-chip">Buyer</span></td><td></td></tr><tr><td><code class="prop-name">discounts</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">metadata</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">client_context</code><span class="req-badge">required</span></td><td><span class="type-chip">ClientContext</span></td><td></td></tr><tr><td><code class="prop-name">loyalty</code><span class="opt-badge">opt</span></td><td><span class="type-chip">LoyaltyCheckoutInput</span></td><td>Update loyalty redemption amount.</td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Examples</h4><div class="ex-tabs"><button class="ex-tab active" onclick="switchEx(this,'ex_add_item')">add_item</button><button class="ex-tab " onclick="switchEx(this,'ex_apply_discount')">apply_discount</button><button class="ex-tab " onclick="switchEx(this,'ex_update_contact')">update_contact</button></div><div class="ex-panels"><div class="ex-panel active" id="ex_add_item"><pre class="code-block">{
+  "line_items": {
+    "add": [
+      {
+        "catalog_id": "item_mouse_pad",
+        "quantity": 1
+      }
+    ]
+  }
+}</pre></div><div class="ex-panel " id="ex_apply_discount"><pre class="code-block">{
+  "discounts": {
+    "apply": [
+      "WELCOME10"
+    ]
+  }
+}</pre></div><div class="ex-panel " id="ex_update_contact"><pre class="code-block">{
+  "buyer": {
+    "email": "jane.doe@example.com"
+  }
+}</pre></div></div></div>
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Updated session. If `cart_mandate_invalidated: true`, the agent
+must re-collect user counter-signature before calling complete.
+ &rarr; <code class="prop-name">CheckoutSession</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">400</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">401</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">404</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">409</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">422</span></td><td></td></tr><tr><td><span class="status-code" style="color:#ef4444;border-color:#ef444440">500</span></td><td></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="cancelCheckout" data-tag="Checkout">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f630">POST</span><code class="endpoint-path">/v1/checkouts/{session_id}/cancel</code><span class="endpoint-summary">Cancel a checkout session</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Checkout</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Terminates the session from any pre-completion state.<br>- CartMandate is cryptographically voided<br>- CP is notified to invalidate any pre-staged token for this mandate_id<br>- CancelRecord appended to mandate chain for audit<br><br>Idempotent. Cannot cancel a completed session.<br></p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#0891b220;color:#0891b2">path</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Agent</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Version</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Body &mdash; <code class="prop-name">CancelRequest</code></h4><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">reason</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">user_abandoned</code><code class="enum-val">item_unavailable</code><code class="enum-val">payment_handler_unavailable</code><code class="enum-val">mandate_expired</code><code class="enum-val">merchant_initiated</code><code class="enum-val">agent_error</code><code class="enum-val">session_timeout</code><code class="enum-val">other</code></div></td></tr><tr><td><code class="prop-name">initiated_by</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">consumer_agent</code><code class="enum-val">merchant_agent</code><code class="enum-val">system</code></div></td></tr><tr><td><code class="prop-name">notes</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">client_context</code><span class="opt-badge">opt</span></td><td><span class="type-chip">ClientContext</span></td><td></td></tr></tbody></table></div>
+    
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Session cancelled; mandate voided &rarr; <code class="prop-name">CancelResponse</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">401</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">404</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">409</span></td><td>Cannot cancel a completed session &rarr; <code class="prop-name">ErrorResponse</code></td></tr><tr><td><span class="status-code" style="color:#ef4444;border-color:#ef444440">500</span></td><td></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="completeCheckout" data-tag="Checkout">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f630">POST</span><code class="endpoint-path">/v1/checkouts/{session_id}/complete</code><span class="endpoint-summary">Complete the checkout — submit signed mandate and payment handler</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Checkout</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Step 2 — AUTHORISE AND Complete.<br><br>The agent submits three things:<br>1. **`cart_mandate`** — the CartMandate with the user's counter-signature.<br>   This is the purchase authorisation. It contains `session_id` inside its<br>   signed payload — the cryptographic link to the checkout session.<br>2. **`payment_handler_id`** — which handler to use. This is a reference,<br>   not a credential. The merchant uses it to call the correct Credential<br>   Provider server-to-server. The agent never sees the token.<br>3. **`confirm_total`** — the agent echoes the grand_total it expects to be<br>   charged. Must match the CartMa</p>
+    <div class="section-block"><h4 class="block-title">Parameters</h4><table class="props-table"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#0891b220;color:#0891b2">path</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Idempotency-Key</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td>UUID. Required on all POST requests.</td></tr><tr><td><code class="prop-name">FCP-Agent</code><span class="req-badge">required</span></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">FCP-Version</code></td><td><span class="param-loc" style="background:#7c3aed20;color:#7c3aed">header</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Body &mdash; <code class="prop-name">CompleteCheckoutRequest</code></h4><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">confirm_total</code><span class="req-badge">required</span></td><td><span class="type-chip">number</span></td><td>Must match cart_mandate.grand_total to the cent.
+Guards against silent price drift between session creation and completion.
+<code class="ex-val">94.98</code></td></tr><tr><td><code class="prop-name">currency</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">USD</code></td></tr><tr><td><code class="prop-name">payment_handler_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>ID of a handler declared in the merchant's capability profile.
+The agent presents the handler list (from the profile) to the user
+after CREATE; the user picks one; this field carries that choice.
+The merchant uses this to call the correct CP at settlement time.
+The agent never receives or submits the resulting token.
+<code class="ex-val">handler_google_pay</code></td></tr><tr><td><code class="prop-name">cart_mandate</code><span class="req-badge">required</span></td><td><span class="type-chip">CartMandateSigned</span></td><td></td></tr><tr><td><code class="prop-name">client_context</code><span class="req-badge">required</span></td><td><span class="type-chip">ClientContext</span></td><td></td></tr></tbody></table></div>
+    <div class="section-block"><h4 class="block-title">Request Examples</h4><div class="ex-tabs"><button class="ex-tab active" onclick="switchEx(this,'ex_human_present')">Human-present completion with client_c</button><button class="ex-tab " onclick="switchEx(this,'ex_autonomous')">Autonomous agent completion</button></div><div class="ex-panels"><div class="ex-panel active" id="ex_human_present"><pre class="code-block">{
+  "confirm_total": 84.98,
+  "currency": "USD",
+  "payment_handler_id": "handler_google_pay",
+  "cart_mandate": {
+    "mandate_id": "cm_001",
+    "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "user_counter_signature": "eyJhbGciOiJFUzI1NiJ9.user...",
+    "signed_at": "2026-03-24T09:44:00Z"
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "region": "GA",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.42",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_a1b2c3d4e5f6",
+      "device_type": "mobile",
+      "os": "iOS",
+      "os_version": "18.2",
+      "app_version": "4.1.0",
+      "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+      "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+      "is_emulator": false,
+      "is_rooted": false
+    },
+    "risk": {
+      "session_age_seconds": 310,
+      "is_new_device": false,
+      "previous_orders_count": 7,
+      "account_age_days": 412,
+      "velocity_last_1h": 1,
+      "velocity_last_24h": 2,
+      "risk_score": 14,
+      "risk_signals": []
+    }
+  }
+}</pre></div><div class="ex-panel " id="ex_autonomous"><pre class="code-block">{
+  "confirm_total": 34.99,
+  "currency": "USD",
+  "payment_handler_id": "handler_stripe_card",
+  "cart_mandate": {
+    "mandate_id": "cm_002",
+    "session_id": "fcp_sess_z9y8x7w6v5u4t3s2",
+    "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+    "agent_auto_signature": "eyJhbGciOiJFUzI1NiJ9.agent...",
+    "signed_at": "2026-03-24T08:00:00Z"
+  },
+  "client_context": {
+    "location": {
+      "country": "US",
+      "region": "GA",
+      "postal_code": "30301",
+      "ip_address": "203.0.113.88",
+      "ip_country": "US",
+      "is_vpn": false,
+      "is_proxy": false,
+      "is_tor": false
+    },
+    "device": {
+      "device_id": "dev_agent_headless_001",
+      "device_type": "server",
+      "os": "Linux",
+      "os_version": "6.1",
+      "app_version": "agent_runtime_2.0",
+      "user_agent": "FCPAgent/2.0 (headless; Linux)",
+      "is_emulator": false,
+      "is_rooted": false
+    },
+    "risk": {
+      "session_age_seconds": 5,
+      "is_new_device": false,
+      "previous_orders_count": 12,
+      "account_age_days": 730,
+      "velocity_last_1h": 0,
+      "velocity_last_24h": 1,
+      "risk_score": 5,
+      "risk_signals": []
+    }
+  }
+}</pre></div></div></div>
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Checkout completed. Payment settled CP→PSP direct. Order created.
+ &rarr; <code class="prop-name">CompleteResponse</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">400</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">401</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">402</span></td><td>Payment declined by PSP or token resolution failed at CP &rarr; <code class="prop-name">ErrorResponse</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">404</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">409</span></td><td></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">422</span></td><td>Mandate or amount verification failed &rarr; <code class="prop-name">ErrorResponse</code></td></tr><tr><td><span class="status-code" style="color:#ef4444;border-color:#ef444440">500</span></td><td></td></tr></tbody></table></div>
+  </div>
+</div>
+<div class="endpoint-card" id="verifyMandate" data-tag="Mandates">
+  <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-title"><span class="method-badge" style="background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f630">POST</span><code class="endpoint-path">/v1/mandates/verify</code><span class="endpoint-summary">Verify a mandate chain</span></div>
+    <div class="endpoint-meta"><span class="tag-chip">Mandates</span><span class="chevron">&#9662;</span></div>
+  </div>
+  <div class="endpoint-body">
+    <p class='ep-desc'>Utility for PSPs, auditors, and dispute resolution.</p>
+    
+    <div class="section-block"><h4 class="block-title">Request Body &mdash; <code class="prop-name">MandateVerifyRequest</code></h4><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">mandates</code><span class="req-badge">required</span></td><td><span class="type-chip">array<object></span></td><td></td></tr></tbody></table></div>
+    
+    <div class="section-block"><h4 class="block-title">Responses</h4><table class="props-table"><thead><tr><th>Status</th><th>Description</th></tr></thead><tbody><tr><td><span class="status-code" style="color:#10b981;border-color:#10b98140">200</span></td><td>Verification report &rarr; <code class="prop-name">MandateVerifyResponse</code></td></tr><tr><td><span class="status-code" style="color:#f59e0b;border-color:#f59e0b40">400</span></td><td></td></tr></tbody></table></div>
+  </div>
+</div></div>
+<div class="section-title" id="schemas-section" style="margin-top:48px">Schemas</div><div id="schemas-container">
+<div class="schema-card" id="schema-ClientContext">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">ClientContext</code>
+    <span class="schema-desc">Required on every FCP request. Location, device, and risk signals used for tax jurisdictio</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">location</code><span class="req-badge">required</span></td><td><span class="type-chip">LocationContext</span></td><td></td></tr><tr><td><code class="prop-name">device</code><span class="req-badge">required</span></td><td><span class="type-chip">DeviceContext</span></td><td></td></tr><tr><td><code class="prop-name">risk</code><span class="req-badge">required</span></td><td><span class="type-chip">RiskContext</span></td><td></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-LocationContext">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">LocationContext</code>
+    <span class="schema-desc">Geographic origin of the request. Used for:
+- Tax jurisdiction determination (country + re</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">latitude</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>GPS latitude. Omit for server-side agents.<code class="ex-val">33.749</code></td></tr><tr><td><code class="prop-name">longitude</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>GPS longitude.<code class="ex-val">-84.388</code></td></tr><tr><td><code class="prop-name">country</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>ISO 3166-1 alpha-2 country code derived from GPS or IP.<code class="ex-val">US</code></td></tr><tr><td><code class="prop-name">region</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>State / province / region code.<code class="ex-val">GA</code></td></tr><tr><td><code class="prop-name">city</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">Atlanta</code></td></tr><tr><td><code class="prop-name">postal_code</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Used for precise tax jurisdiction resolution.<code class="ex-val">30301</code></td></tr><tr><td><code class="prop-name">ip_address</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>IPv4 or IPv6 of the requesting client.<code class="ex-val">203.0.113.42</code></td></tr><tr><td><code class="prop-name">ip_country</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Country resolved from IP geolocation. May differ from GPS country — mismatch is a risk signal.<code class="ex-val">US</code></td></tr><tr><td><code class="prop-name">is_vpn</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>IP identified as a known VPN exit node.<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">is_proxy</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>IP identified as an open or commercial proxy.<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">is_tor</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>IP identified as a Tor exit node.<code class="ex-val">False</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-DeviceContext">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">DeviceContext</code>
+    <span class="schema-desc">Device and client identity. Used for:
+- Known-device trust scoring (recognised device = lo</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">device_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>Stable per-device ID. Must be consistent across the session — mismatch between create and complete triggers a security alert.<code class="ex-val">dev_a1b2c3d4e5f6</code></td></tr><tr><td><code class="prop-name">device_type</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">mobile</code><code class="enum-val">tablet</code><code class="enum-val">desktop</code><code class="enum-val">wearable</code><code class="enum-val">tv</code><code class="enum-val">server</code><code class="enum-val">iot</code><code class="enum-val">unknown</code></div><code class="ex-val">mobile</code></td></tr><tr><td><code class="prop-name">os</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">iOS</code></td></tr><tr><td><code class="prop-name">os_version</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">18.2</code></td></tr><tr><td><code class="prop-name">app_version</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Version of the agent app or runtime.<code class="ex-val">4.1.0</code></td></tr><tr><td><code class="prop-name">user_agent</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>Full User-Agent string.<code class="ex-val">FCPAgent/4.1.0 (iOS 18.2; iPhone)</code></td></tr><tr><td><code class="prop-name">fingerprint</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Hardware/software hash for cross-session fraud correlation.<code class="ex-val">fp_7f8e9d0a1b2c3d4e</code></td></tr><tr><td><code class="prop-name">is_emulator</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>Device is a software emulator — associated with automated fraud tooling.<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">is_rooted</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>OS has been rooted or jailbroken — weakened key storage, elevated risk.<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">screen_resolution</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>WxH pixels (mobile/desktop only).<code class="ex-val">390x844</code></td></tr><tr><td><code class="prop-name">language</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Device/app locale.<code class="ex-val">en-US</code></td></tr><tr><td><code class="prop-name">timezone</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>IANA timezone.<code class="ex-val">America/New_York</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-RiskContext">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">RiskContext</code>
+    <span class="schema-desc">Behavioural and account-level risk signals computed by the agent app or a client-side risk</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_age_seconds</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Active session duration in seconds. Very short + high-value order = automated fraud pattern.<code class="ex-val">142</code></td></tr><tr><td><code class="prop-name">is_new_device</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>First-seen device_id for this user.<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">previous_orders_count</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Total historical orders by this user at this merchant.<code class="ex-val">7</code></td></tr><tr><td><code class="prop-name">account_age_days</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Age of the user account at this merchant in days.<code class="ex-val">412</code></td></tr><tr><td><code class="prop-name">velocity_last_1h</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Checkout attempts in the last 1 hour.<code class="ex-val">1</code></td></tr><tr><td><code class="prop-name">velocity_last_24h</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Checkout attempts in the last 24 hours.<code class="ex-val">2</code></td></tr><tr><td><code class="prop-name">risk_score</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Composite score 0–100. 0 = no risk, 100 = max risk. Merchant configures thresholds: e.g. &gt;70 = SCA required, &gt;90 = reject.<code class="ex-val">12</code></td></tr><tr><td><code class="prop-name">risk_signals</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<string></span></td><td>Discrete flags contributing to risk_score. Empty array means no signals triggered.<code class="ex-val">[]</code></td></tr><tr><td><code class="prop-name">three_ds_exemption_claimed</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>PSD2 3DS exemption reason if claimed. Null = no exemption, SCA proceeds normally.<div class="enum-list"><code class="enum-val">low_value</code><code class="enum-val">trusted_beneficiary</code><code class="enum-val">recurring_transaction</code><code class="enum-val">corporate_payment</code><code class="enum-val">low_risk_analysis</code></div></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-IntentMandate">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">IntentMandate</code>
+    <span class="schema-desc">User-signed shopping intent. Authorises the agent to act within
+defined constraints. Both </span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">mandate_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">im_001</code></td></tr><tr><td><code class="prop-name">signed_by</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>DID of the signing key<code class="ex-val">did:key:zAgent123</code></td></tr><tr><td><code class="prop-name">constraints</code><span class="req-badge">required</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">signature</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">eyJhbGciOiJFUzI1NiJ9...</code></td></tr><tr><td><code class="prop-name">issued_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-CartMandateIssued">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">CartMandateIssued</code>
+    <span class="schema-desc">Merchant-signed CartMandate returned in the session response.
+Contains session_id inside t</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">mandate_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">cm_001</code></td></tr><tr><td><code class="prop-name">session_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Inside the merchant's signature. Binds this mandate to the session.
+When the agent submits this mandate in complete, the merchant
+extracts and verifies session_id from the signed payload — not
+just from the URL.
+<code class="ex-val">fcp_sess_a1b2c3d4e5f6g7h8</code></td></tr><tr><td><code class="prop-name">intent_mandate_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">im_001</code></td></tr><tr><td><code class="prop-name">merchant_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">merch_abc123</code></td></tr><tr><td><code class="prop-name">line_item_snapshot</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<LineItemResolved></span></td><td>Immutable cart snapshot at mandate issuance time</td></tr><tr><td><code class="prop-name">grand_total</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>The exact amount that will be charged<code class="ex-val">94.98</code></td></tr><tr><td><code class="prop-name">currency</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">USD</code></td></tr><tr><td><code class="prop-name">merchant_signature</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>JWS over the full CartMandate payload<code class="ex-val">eyJhbGciOiJFUzI1NiJ9.merchant...</code></td></tr><tr><td><code class="prop-name">issued_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">expires_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">discounts_snapshot</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<AppliedDiscount></span></td><td>Discounts locked into this mandate at issuance — immutable once signed.</td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-CartMandateSigned">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">CartMandateSigned</code>
+    <span class="schema-desc">The CartMandate as submitted in CompleteCheckoutRequest.
+Merchant signature is unchanged f</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">mandate_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">cm_001</code></td></tr><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>Must match the URL session_id. Verified inside the merchant
+signature — cannot be altered without breaking the signature.
+<code class="ex-val">fcp_sess_a1b2c3d4e5f6g7h8</code></td></tr><tr><td><code class="prop-name">merchant_signature</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>Unchanged from CartMandateIssued<code class="ex-val">eyJhbGciOiJFUzI1NiJ9.merchant...</code></td></tr><tr><td><code class="prop-name">user_counter_signature</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>User's JWS counter-signature (human_present)<code class="ex-val">eyJhbGciOiJFUzI1NiJ9.user...</code></td></tr><tr><td><code class="prop-name">agent_auto_signature</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Agent JWS auto-sig (human_not_present, within IntentMandate bounds)<code class="ex-val">eyJhbGciOiJFUzI1NiJ9.agent...</code></td></tr><tr><td><code class="prop-name">signed_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-CheckoutSession">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">CheckoutSession</code>
+    <span class="schema-desc"></span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">fcp_sess_a1b2c3d4e5f6g7h8</code></td></tr><tr><td><code class="prop-name">status</code><span class="req-badge">required</span></td><td><span class="type-chip">SessionStatus</span></td><td></td></tr><tr><td><code class="prop-name">mode</code><span class="opt-badge">opt</span></td><td><span class="type-chip">CheckoutMode</span></td><td></td></tr><tr><td><code class="prop-name">merchant_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">merch_abc123</code></td></tr><tr><td><code class="prop-name">line_items</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<LineItemResolved></span></td><td></td></tr><tr><td><code class="prop-name">buyer</code><span class="opt-badge">opt</span></td><td><span class="type-chip">Buyer</span></td><td></td></tr><tr><td><code class="prop-name">totals</code><span class="opt-badge">opt</span></td><td><span class="type-chip">Totals</span></td><td></td></tr><tr><td><code class="prop-name">discounts_applied</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<AppliedDiscount></span></td><td></td></tr><tr><td><code class="prop-name">cart_mandate</code><span class="opt-badge">opt</span></td><td><span class="type-chip">CartMandateIssued</span></td><td>Current merchant-signed CartMandate. Contains grand_total and
+session_id inside the signed payload. The agent presents this to
+the user for review and counter-signature before calling complete.
+</td></tr><tr><td><code class="prop-name">cart_mandate_invalidated</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td>True when a previous CartMandate was voided by this update.
+Agent must re-collect the user's counter-signature.
+<code class="ex-val">False</code></td></tr><tr><td><code class="prop-name">available_payment_handlers</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<PaymentHandlerSummary></span></td><td>Handlers available for this session. Present these to the user
+after showing the CartMandate (so they know the final price before
+selecting a payment method). The selected handler's `id` goes into
+CompleteCheckoutRequest.payment_handler_id.
+</td></tr><tr><td><code class="prop-name">mandate_chain</code><span class="opt-badge">opt</span></td><td><span class="type-chip">MandateChainSummary</span></td><td></td></tr><tr><td><code class="prop-name">available_actions</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<string></span></td><td>Actions the agent may take from this state<code class="ex-val">['update', 'cancel', 'complete']</code></td></tr><tr><td><code class="prop-name">metadata</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td></td></tr><tr><td><code class="prop-name">created_at</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">updated_at</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">expires_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>15 min for human_present; 24 hr for human_not_present</td></tr><tr><td><code class="prop-name">discounts_rejected</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<object></span></td><td>Discounts submitted but not applied (invalid code, expired, non-stackable). Session still created.</td></tr><tr><td><code class="prop-name">loyalty_session</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td>Loyalty state for this session (present when loyalty account attached).</td></tr><tr><td><code class="prop-name">risk_decision</code><span class="opt-badge">opt</span></td><td><span class="type-chip">object</span></td><td>Merchant's risk assessment of this session (informational).</td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-CompleteResponse">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">CompleteResponse</code>
+    <span class="schema-desc"></span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">session_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">status</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">completed</code></div></td></tr><tr><td><code class="prop-name">order_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">ord_20260324_00123</code></td></tr><tr><td><code class="prop-name">completed_at</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">grand_total</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td><code class="ex-val">94.98</code></td></tr><tr><td><code class="prop-name">currency</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">settlement</code><span class="opt-badge">opt</span></td><td><span class="type-chip">SettlementRecord</span></td><td></td></tr><tr><td><code class="prop-name">mandate_chain</code><span class="opt-badge">opt</span></td><td><span class="type-chip">MandateChainSummary</span></td><td></td></tr><tr><td><code class="prop-name">receipt_url</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">discounts_applied</code><span class="opt-badge">opt</span></td><td><span class="type-chip">array<AppliedDiscount></span></td><td>Discounts that were applied on this completed order.</td></tr><tr><td><code class="prop-name">loyalty_result</code><span class="opt-badge">opt</span></td><td><span class="type-chip">LoyaltyCheckoutResult</span></td><td>Present when loyalty account was attached to session.</td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-DiscountInput">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">DiscountInput</code>
+    <span class="schema-desc">A discount to apply to the checkout. Replaces bare string codes.</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">type</code><span class="req-badge">required</span></td><td><span class="type-chip">string</span></td><td>PROMO_CODE: user-entered code — requires code field
+AUTOMATIC: merchant rule — no input needed
+LOYALTY_REDEMPTION: points redemption — requires loyalty.redeem_points
+AGENT_OFFER: personalised offer — requires offer_id
+BUNDLE: bundle pricing — merchant applies automatically<div class="enum-list"><code class="enum-val">PROMO_CODE</code><code class="enum-val">AUTOMATIC</code><code class="enum-val">LOYALTY_REDEMPTION</code><code class="enum-val">AGENT_OFFER</code><code class="enum-val">BUNDLE</code></div><code class="ex-val">PROMO_CODE</code></td></tr><tr><td><code class="prop-name">code</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Required for PROMO_CODE.<code class="ex-val">SUMMER15</code></td></tr><tr><td><code class="prop-name">offer_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Required for AGENT_OFFER.<code class="ex-val">offer_abc123</code></td></tr><tr><td><code class="prop-name">loyalty_points</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Points being redeemed — informational for LOYALTY_REDEMPTION.<code class="ex-val">1000</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-AppliedDiscount">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">AppliedDiscount</code>
+    <span class="schema-desc">A discount successfully applied, reflected in totals.</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">discount_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Server-assigned ID for this discount instance.<code class="ex-val">disc_001</code></td></tr><tr><td><code class="prop-name">type</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">PROMO_CODE</code><code class="enum-val">AUTOMATIC</code><code class="enum-val">LOYALTY_REDEMPTION</code><code class="enum-val">AGENT_OFFER</code><code class="enum-val">BUNDLE</code></div></td></tr><tr><td><code class="prop-name">code</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Code used (PROMO_CODE only).<code class="ex-val">SUMMER15</code></td></tr><tr><td><code class="prop-name">description</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Human-readable label for display.<code class="ex-val">Summer Sale — 15% off</code></td></tr><tr><td><code class="prop-name">applies_to</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">order</code><code class="enum-val">line_item</code><code class="enum-val">shipping</code></div><code class="ex-val">order</code></td></tr><tr><td><code class="prop-name">value_type</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">percentage</code><code class="enum-val">fixed_amount</code><code class="enum-val">free_shipping</code></div><code class="ex-val">percentage</code></td></tr><tr><td><code class="prop-name">value</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>Percentage or fixed amount.<code class="ex-val">15</code></td></tr><tr><td><code class="prop-name">amount_saved</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>Actual dollar amount deducted.<code class="ex-val">15.9</code></td></tr><tr><td><code class="prop-name">stackable</code><span class="opt-badge">opt</span></td><td><span class="type-chip">boolean</span></td><td><code class="ex-val">True</code></td></tr><tr><td><code class="prop-name">loyalty_points_redeemed</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Points consumed (LOYALTY_REDEMPTION only).<code class="ex-val">1000</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-LoyaltyCheckoutInput">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">LoyaltyCheckoutInput</code>
+    <span class="schema-desc">Loyalty redemption submitted in CreateCheckout or UpdateCheckout.</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">account_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td>Loyalty account to attach to this session.<code class="ex-val">loyalty_jane_001</code></td></tr><tr><td><code class="prop-name">redeem_points</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Points to redeem. Must be &gt;= min_redemption_points. Converted to a LOYALTY_REDEMPTION discount entry.<code class="ex-val">1000</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-LoyaltyCheckoutResult">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">LoyaltyCheckoutResult</code>
+    <span class="schema-desc">Loyalty outcome returned in CompleteResponse.</span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">account_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><code class="ex-val">loyalty_jane_001</code></td></tr><tr><td><code class="prop-name">points_redeemed</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Points redeemed as discount on this order.<code class="ex-val">1000</code></td></tr><tr><td><code class="prop-name">redemption_value_usd</code><span class="opt-badge">opt</span></td><td><span class="type-chip">number</span></td><td>Dollar value of redeemed points.<code class="ex-val">10.0</code></td></tr><tr><td><code class="prop-name">points_earned</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Points earned from this purchase (pending settlement).<code class="ex-val">750</code></td></tr><tr><td><code class="prop-name">new_balance</code><span class="opt-badge">opt</span></td><td><span class="type-chip">integer</span></td><td>Projected balance after redemption and earn.<code class="ex-val">3250</code></td></tr></tbody></table></div>
+</div>
+<div class="schema-card" id="schema-MandateChainSummary">
+  <div class="schema-header" onclick="toggleSchema(this)">
+    <code class="schema-name">MandateChainSummary</code>
+    <span class="schema-desc"></span>
+    <span class="chevron">&#9662;</span>
+  </div>
+  <div class="schema-body"><table class="props-table"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code class="prop-name">intent_mandate_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">intent_mandate_status</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">valid</code><code class="enum-val">expired</code><code class="enum-val">violated</code><code class="enum-val">revoked</code></div></td></tr><tr><td><code class="prop-name">cart_mandate_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">cart_mandate_status</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">pending_user_signature</code><code class="enum-val">signed</code><code class="enum-val">voided</code></div></td></tr><tr><td><code class="prop-name">settlement_mandate_id</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td></td></tr><tr><td><code class="prop-name">settlement_mandate_status</code><span class="opt-badge">opt</span></td><td><span class="type-chip">string</span></td><td><div class="enum-list"><code class="enum-val">not_issued</code><code class="enum-val">issued</code><code class="enum-val">settled</code><code class="enum-val">failed</code></div></td></tr></tbody></table></div>
+</div></div>
+</main></div>
+<script>function toggleEndpoint(h){const c=h.closest('.endpoint-card');c.classList.toggle('open');updateNavActive();}
+function toggleSchema(h){h.closest('.schema-card').classList.toggle('open');}
+function filterTag(tag,btn){
+  document.querySelectorAll('.tag-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  const eps=document.querySelectorAll('.endpoint-card');
+  const sc=document.getElementById('schemas-container');
+  const ss=document.getElementById('schemas-section');
+  const es=document.getElementById('endpoints-section');
+  eps.forEach(ep=>{
+    if(tag==='all'||ep.dataset.tag===tag){ep.classList.remove('hidden');}
+    else{ep.classList.add('hidden');ep.classList.remove('open');}
+  });
+  if(tag==='Schemas'){eps.forEach(ep=>ep.classList.add('hidden'));es.classList.add('hidden');sc.classList.remove('hidden');ss.classList.remove('hidden');}
+  else if(tag!=='all'){sc.classList.add('hidden');ss.classList.add('hidden');es.classList.remove('hidden');}
+  else{sc.classList.remove('hidden');ss.classList.remove('hidden');es.classList.remove('hidden');}
+}
+function searchDocs(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.endpoint-card').forEach(function(c){var ok=!q||c.textContent.toLowerCase().includes(q);c.classList.toggle('hidden',!ok);if(!ok)c.classList.remove('open');});
+  document.querySelectorAll('.schema-card').forEach(function(c){c.classList.toggle('hidden',!!q&&!c.textContent.toLowerCase().includes(q));});
+}
+function switchEx(btn,id){
+  var w=btn.closest('.section-block');
+  w.querySelectorAll('.ex-tab').forEach(function(t){t.classList.remove('active');});
+  w.querySelectorAll('.ex-panel').forEach(function(p){p.classList.remove('active');});
+  btn.classList.add('active');
+  var p=w.querySelector('#'+id);if(p)p.classList.add('active');
+}
+function updateNavActive(){
+  var open=document.querySelector('.endpoint-card.open');
+  document.querySelectorAll('.nav-link').forEach(function(l){l.classList.remove('active');});
+  if(open){var lk=document.querySelector('.nav-link[href="#'+open.id+'"]');if(lk)lk.classList.add('active');}
+}
+function handleHash(){
+  var h=window.location.hash.slice(1);if(!h)return;
+  var el=document.getElementById(h);if(!el)return;
+  if(el.classList.contains('endpoint-card'))el.classList.add('open');
+  else if(el.classList.contains('schema-card'))el.classList.add('open');
+  updateNavActive();
+  setTimeout(function(){el.scrollIntoView({behavior:'smooth',block:'start'});},50);
+}
+window.addEventListener('DOMContentLoaded',handleHash);
+window.addEventListener('hashchange',handleHash);
+</script>
+</body></html>
