@@ -1,0 +1,2592 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FCP \u2014 Federated Commerce Protocol",
+    "version": "1.0.0",
+    "description": "# FCP \u2014 Federated Commerce Protocol\n**Version:** 1.0.0  |  **License:** Apache 2.0  |  **Status:** Draft\n\n---\n\n## Overview\n\nFCP (Federated Commerce Protocol) is an open, vendor-neutral protocol for the\nfull lifecycle of agentic commerce \u2014 from merchant capability discovery through\nto payment settlement. It defines a standard language for AI agents, merchants,\nand payment providers to interoperate without custom integrations.\n\n---\n\n## Protocol Actors\n\n| Actor | Role |\n|-------|------|\n| **Consumer Agent (CA)** | AI acting on behalf of the user. Orchestrates the checkout flow. Never handles raw payment credentials. |\n| **Merchant Agent (MA)** | Business backend. Computes totals, issues CartMandate, owns order fulfillment. Always Merchant of Record. |\n| **Credential Provider (CP)** | Issues payment tokens scoped to a CartMandate. Delivers tokens directly to the PSP. |\n| **Payment Service Provider (PSP)** | Receives SettlementMandate from the merchant. Executes fund capture. |\n\n---\n\n## Session Lifecycle\n\n```\nDISCOVER \u2192 CREATE \u2192 [GET / PATCH] \u2192 COMPLETE\n               \u2193                        \u2193\n            CANCEL  \u2190\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n| State | Description |\n|-------|-------------|\n| `pending_mandate` | CartMandate issued by merchant. User reviewing price and counter-signing. |\n| `ready` | CartMandate signed. Safe to call complete. |\n| `completed` | Payment captured. Order created. Terminal. |\n| `cancelled` | Terminated before completion. Mandate voided. Terminal. |\n| `expired` | TTL elapsed. 15 min for human_present. 24 hr for human_not_present. Terminal. |\n\n---\n\n## Two-Phase Checkout\n\n### Phase 1 \u2014 WHAT TO BUY  \u2192  `POST /v1/checkouts`\nSubmit cart intent: items, buyer, discounts, loyalty redemption, and the\nuser-signed IntentMandate. No payment information. The merchant computes\ntax, shipping, and discounts server-side and returns a signed CartMandate\nwith the locked `grand_total`.\n\n### Phase 2 \u2014 AUTHORISE AND FIRE  \u2192  `POST /v1/checkouts/{id}/complete`\nSubmit the signed CartMandate, payment handler reference, and `confirm_total`\necho. The merchant verifies the full mandate chain, then resolves the payment\ntoken server-to-server (CP \u2192 PSP). The agent never sees the token.\n\n---\n\n## client_context \u2014 Required on Every Request\n\nEvery FCP request must carry location, device, and risk signals.\n\n**On GET requests** \u2014 submit as `FCP-Client-Context` header (base64url-encoded JSON).\n**On POST / PATCH requests** \u2014 submit as `client_context` field in the request body.\n\n### location\nUsed for tax jurisdiction, geo-restriction screening, sanctions checks, and PSD2 SCA thresholds.\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `country` | string | ISO 3166-1 alpha-2. Required. |\n| `region` | string | State / province code. |\n| `postal_code` | string | Precise tax jurisdiction. |\n| `ip_address` | string | IPv4 or IPv6. Required. |\n| `ip_country` | string | Country resolved from IP. Mismatch vs GPS = risk signal. |\n| `is_vpn` | boolean | IP is a known VPN exit node. |\n| `is_proxy` | boolean | IP is an open or commercial proxy. |\n| `is_tor` | boolean | IP is a Tor exit node. |\n\n### device\nUsed for session hijack detection, known-device trust scoring, and fraud clustering.\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `device_id` | string | Stable per-device ID. Required. Must be consistent across the session \u2014 mismatch between create and complete triggers a security alert. |\n| `device_type` | enum | mobile, tablet, desktop, server, iot, unknown. |\n| `fingerprint` | string | Hardware/software hash for cross-session correlation. |\n| `is_emulator` | boolean | Emulators associated with automated fraud tooling. |\n| `is_rooted` | boolean | Rooted/jailbroken OS weakens key storage \u2014 elevated risk. |\n| `user_agent` | string | Full User-Agent string. Required. |\n\n### risk\nUsed for real-time fraud scoring and SCA threshold decisions.\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `risk_score` | integer 0\u2013100 | Composite score. 0 = no risk, 100 = max risk. Merchant configures thresholds (e.g. >70 = SCA, >90 = reject). |\n| `risk_signals` | string[] | Discrete flags: new_shipping_address, shipping_billing_mismatch, rapid_cart_assembly, ip_country_mismatch, etc. |\n| `velocity_last_1h` | integer | Checkout attempts in last 1 hour. |\n| `velocity_last_24h` | integer | Checkout attempts in last 24 hours. |\n| `session_age_seconds` | integer | Very short + high-value = automated fraud pattern. |\n| `account_age_days` | integer | New accounts with large orders = common fraud pattern. |\n| `three_ds_exemption_claimed` | enum | PSD2 exemption if claimed: low_value, recurring_transaction, trusted_beneficiary, etc. |\n\n### Delta Check at complete\nThe merchant compares `client_context` at complete time against the one submitted at create:\n- `device_id` changed \u2192 possible session hijack \u2192 **reject**\n- `location.country` changed \u2192 geo inconsistency \u2192 **flag for review**\n- `risk_score` spike \u2192 elevated fraud signal \u2192 **SCA step-up**\n\n---\n\n## Discounts\n\nDiscounts are first-class typed objects \u2014 not bare strings.\n\n| Type | Submitted By | Requires | Description |\n|------|-------------|----------|-------------|\n| `PROMO_CODE` | Agent | `code` field | User-entered promotional code. |\n| `AUTOMATIC` | Merchant | Nothing | Rule-based (e.g. buy 2 get 10% off). Applied automatically. |\n| `LOYALTY_REDEMPTION` | Agent via loyalty | `loyalty.redeem_points` | Points redeemed as dollar value. |\n| `AGENT_OFFER` | Agent | `offer_id` | Personalised offer surfaced by the agent. |\n| `BUNDLE` | Merchant | Nothing | Cross-item bundle pricing. Applied automatically. |\n\n**Stackability** is declared in `MerchantProfile.discount_policy`. Rejected discounts\nsurface in `CheckoutSession.discounts_rejected` without aborting the session.\n\nAll applied discounts are locked into `CartMandateIssued.discounts_snapshot` \u2014\nimmutable once the mandate is signed.\n\n---\n\n## Loyalty\n\nLoyalty is embedded in the checkout session \u2014 no separate endpoint.\n\n| Step | Where | What |\n|------|-------|------|\n| 1. Submit redemption | `CreateCheckoutRequest.loyalty` | `account_id` + `redeem_points` |\n| 2. View session balance | `CheckoutSession.loyalty_session` | balance, redeemed amount, projected earn |\n| 3. Locked into mandate | `CartMandateIssued.discounts_snapshot` | Appears as `LOYALTY_REDEMPTION` discount |\n| 4. Result on complete | `CompleteResponse.loyalty_result` | `points_earned`, `points_redeemed`, `new_balance` |\n\n---\n\n## Mandate Chain\n\nEvery FCP transaction produces a cryptographic audit trail of three linked credentials:\n\n| Mandate | Issued By | Signed By | Purpose |\n|---------|-----------|-----------|---------|\n| **IntentMandate** | Consumer Agent | User (hardware-backed key) | Captures shopping intent and constraints (max_amount, merchant, expiry). Authorises the agent to act. |\n| **CartMandate** | Merchant Agent | Merchant first, then User counter-signs | Locks in exact items, price, session_id, and payment handler. Non-repudiable proof of what was agreed. |\n| **SettlementMandate** | Merchant Agent | Merchant | Packages verified chain for PSP. Never seen by the Consumer Agent. |\n\n### How checkout and complete are associated\n`cart_mandate.session_id` is embedded inside the merchant's JWS signature.\nAt complete, the merchant extracts and verifies it from within the signed payload \u2014\nnot just from the URL. It cannot be altered without breaking the signature.\n\n---\n\n## Payment Token Flow\n\nThe agent submits `payment_handler_id` as a reference only \u2014 it tells the merchant\nwhich Credential Provider to call. The token is resolved server-to-server.\nThe agent never receives, holds, or transmits any payment credential.\n\n```\nAgent               Merchant           Credential Provider    PSP\n  \u2502                    \u2502                       \u2502               \u2502\n  \u2502  POST /complete    \u2502                       \u2502               \u2502\n  \u2502  { cart_mandate,   \u2502                       \u2502               \u2502\n  \u2502    handler_id,     \u2502  resolve_payment(     \u2502               \u2502\n  \u2502    confirm_total,  \u2502    mandate_id,        \u2502               \u2502\n  \u2502    client_context} \u2502    handler_id,        \u2502               \u2502\n  \u2502\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25ba\u2502    grand_total)       \u2502               \u2502\n  \u2502                    \u2502\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25ba\u2502               \u2502\n  \u2502                    \u2502\u25c4\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2502  token        \u2502\n  \u2502                    \u2502  SettlementMandate                    \u2502\n  \u2502                    \u2502  + token                              \u2502\n  \u2502                    \u2502\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25ba\u2502\n  \u2502                    \u2502\u25c4\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2502\n  \u2502  200 { order_id }  \u2502                       \u2502               \u2502\n  \u2502\u25c4\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2502                       \u2502               \u2502\n```\n\n---\n\n## Transport Headers\n\n| Header | Required | Sent On | Description |\n|--------|----------|---------|-------------|\n| `FCP-Agent` | Yes | All | `profile=\"<uri>\"` \u2014 agent capability profile URI |\n| `FCP-Version` | Yes | All | Protocol version, e.g. `1.0` |\n| `FCP-Idempotency-Key` | Required on POST | POST | Client UUID for safe retries |\n| `FCP-Client-Context` | Required on GET | GET | base64url-encoded JSON ClientContext |\n| `Authorization` | Yes | All | `Bearer <token>` OAuth 2.0 |\n\n---\n\n## API Endpoints\n\n| Method | Path | Phase | Description |\n|--------|------|-------|-------------|\n| `GET` | `/.well-known/fcp` | Discovery | Fetch merchant profile, capabilities, payment handlers, loyalty programme |\n| `POST` | `/v1/checkouts` | 1 \u2014 Intent | Create session: items, buyer, discounts, loyalty, intent_mandate |\n| `GET` | `/v1/checkouts/{id}` | Bridge | Get session state, CartMandate, loyalty balance |\n| `PATCH` | `/v1/checkouts/{id}` | Bridge | Update cart, discounts, loyalty redemption |\n| `POST` | `/v1/checkouts/{id}/cancel` | Any | Cancel: void mandate, notify CP |\n| `POST` | `/v1/checkouts/{id}/complete` | 2 \u2014 Authorise | Submit signed mandate + handler ref + client_context |\n| `POST` | `/v1/mandates/verify` | Utility | Verify mandate chain for audits or disputes |\n",
+    "contact": {
+      "name": "FCP Protocol Community",
+      "url": "https://github.com/your-org/fcp"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.merchant.example/.well-known/fcp/v1",
+      "description": "Production"
+    },
+    {
+      "url": "https://sandbox.merchant.example/.well-known/fcp/v1",
+      "description": "Sandbox"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Discovery",
+      "description": "Merchant capability profile"
+    },
+    {
+      "name": "Checkout",
+      "description": "Checkout lifecycle \u2014 create, get, update, cancel, complete"
+    },
+    {
+      "name": "Mandates",
+      "description": "Mandate chain verification (audit / dispute utility)"
+    }
+  ],
+  "paths": {
+    "/.well-known/fcp": {
+      "get": {
+        "tags": [
+          "Discovery"
+        ],
+        "operationId": "getMerchantProfile",
+        "summary": "Fetch merchant capability profile",
+        "security": [],
+        "description": "Returns the merchant's capability profile. Agents fetch this before any\nsession. The `payment_handlers` list is what the agent presents to the\nuser when they need to select a payment method \u2014 this happens client-side\nbetween CREATE and COMPLETE. No extra API call needed.\n",
+        "responses": {
+          "200": {
+            "description": "Merchant capability profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerchantProfile"
+                },
+                "example": {
+                  "fcp_version": "1.3",
+                  "merchant_id": "merch_abc123",
+                  "display_name": "Acme Electronics",
+                  "profile_uri": "https://acme.example/.well-known/fcp",
+                  "capabilities": [
+                    {
+                      "name": "fcp.checkout",
+                      "version": "1.3",
+                      "endpoint": "/v1/checkouts"
+                    },
+                    {
+                      "name": "fcp.catalog",
+                      "version": "1.0",
+                      "endpoint": "/v1/catalog"
+                    },
+                    {
+                      "name": "fcp.orders",
+                      "version": "1.0",
+                      "endpoint": "/v1/orders"
+                    }
+                  ],
+                  "payment_handlers": [
+                    {
+                      "id": "handler_google_pay",
+                      "name": "Google Pay",
+                      "type": "delegated_token",
+                      "display_icon_url": "https://acme.example/icons/gpay.svg"
+                    },
+                    {
+                      "id": "handler_apple_pay",
+                      "name": "Apple Pay",
+                      "type": "delegated_token",
+                      "display_icon_url": "https://acme.example/icons/apay.svg"
+                    },
+                    {
+                      "id": "handler_stripe_card",
+                      "name": "Credit / Debit Card",
+                      "type": "delegated_token",
+                      "display_icon_url": "https://acme.example/icons/card.svg"
+                    }
+                  ],
+                  "trust_anchor": {
+                    "did": "did:web:acme.example",
+                    "signing_key_jwk": {
+                      "kty": "EC",
+                      "crv": "P-256",
+                      "x": "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
+                      "y": "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FCPClientContext"
+          }
+        ]
+      }
+    },
+    "/v1/checkouts": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "operationId": "createCheckout",
+        "summary": "Create a checkout session",
+        "description": "Phase 1 \u2014 WHAT TO BUY.\n\nSubmits cart intent: items, buyer, and the user-signed IntentMandate.\nNo payment information. The grand_total is unknown until the merchant\ncomputes tax, shipping, and discounts server-side.\n\nThe merchant responds with a CartMandate \u2014 a merchant-signed document\ncontaining the session_id, exact items, and grand_total. The agent\npresents this to the user, who:\n1. Sees the final price\n2. Picks a payment handler from the merchant profile list (client-side)\n3. Counter-signs the CartMandate (biometric / PIN on device)\n\nThen the agent calls complete.\n\n**Idempotency key required.**\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/FCPAgent"
+          },
+          {
+            "$ref": "#/components/parameters/FCPVersion"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutRequest"
+              },
+              "examples": {
+                "human_present_loyalty_discount": {
+                  "summary": "Human-present with loyalty redemption + promo code + client_context",
+                  "value": {
+                    "mode": "human_present",
+                    "line_items": [
+                      {
+                        "catalog_id": "item_headphones_pro",
+                        "quantity": 1
+                      },
+                      {
+                        "catalog_id": "item_usbc_cable",
+                        "quantity": 2
+                      }
+                    ],
+                    "buyer": {
+                      "email": "jane@example.com",
+                      "shipping_address": {
+                        "name": "Jane Doe",
+                        "line1": "123 Main St",
+                        "city": "Atlanta",
+                        "state": "GA",
+                        "postal_code": "30301",
+                        "country": "US"
+                      }
+                    },
+                    "discounts": [
+                      {
+                        "type": "PROMO_CODE",
+                        "code": "SUMMER15"
+                      },
+                      {
+                        "type": "LOYALTY_REDEMPTION",
+                        "loyalty_points": 1000
+                      }
+                    ],
+                    "loyalty": {
+                      "account_id": "loyalty_jane_001",
+                      "redeem_points": 1000
+                    },
+                    "intent_mandate": {
+                      "mandate_id": "im_001",
+                      "signed_by": "did:key:zAgent123",
+                      "constraints": {
+                        "max_amount": 300.0,
+                        "currency": "USD",
+                        "expires_at": "2026-03-24T11:00:00Z"
+                      },
+                      "signature": "eyJhbGciOiJFUzI1NiJ9..."
+                    },
+                    "client_context": {
+                      "location": {
+                        "latitude": 33.749,
+                        "longitude": -84.388,
+                        "country": "US",
+                        "region": "GA",
+                        "city": "Atlanta",
+                        "postal_code": "30301",
+                        "ip_address": "203.0.113.42",
+                        "ip_country": "US",
+                        "is_vpn": false,
+                        "is_proxy": false,
+                        "is_tor": false
+                      },
+                      "device": {
+                        "device_id": "dev_a1b2c3d4e5f6",
+                        "device_type": "mobile",
+                        "os": "iOS",
+                        "os_version": "18.2",
+                        "app_version": "4.1.0",
+                        "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+                        "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+                        "is_emulator": false,
+                        "is_rooted": false,
+                        "screen_resolution": "390x844",
+                        "language": "en-US",
+                        "timezone": "America/New_York"
+                      },
+                      "risk": {
+                        "session_age_seconds": 142,
+                        "is_new_device": false,
+                        "previous_orders_count": 7,
+                        "account_age_days": 412,
+                        "velocity_last_1h": 1,
+                        "velocity_last_24h": 2,
+                        "risk_score": 12,
+                        "risk_signals": []
+                      }
+                    }
+                  }
+                },
+                "autonomous": {
+                  "summary": "Autonomous agent \u2014 human_not_present with recurring mandate",
+                  "value": {
+                    "mode": "human_not_present",
+                    "line_items": [
+                      {
+                        "catalog_id": "item_coffee_subscription",
+                        "quantity": 1
+                      }
+                    ],
+                    "buyer": {
+                      "email": "jane@example.com",
+                      "shipping_address": {
+                        "name": "Jane Doe",
+                        "line1": "123 Main St",
+                        "city": "Atlanta",
+                        "state": "GA",
+                        "postal_code": "30301",
+                        "country": "US"
+                      }
+                    },
+                    "intent_mandate": {
+                      "mandate_id": "im_auto_007",
+                      "signed_by": "did:key:zAgent123",
+                      "constraints": {
+                        "max_amount": 50.0,
+                        "currency": "USD",
+                        "merchant_id": "merch_abc123",
+                        "recurrence": "monthly",
+                        "expires_at": "2027-01-01T00:00:00Z"
+                      },
+                      "signature": "eyJhbGciOiJFUzI1NiJ9..."
+                    },
+                    "client_context": {
+                      "location": {
+                        "country": "US",
+                        "region": "GA",
+                        "postal_code": "30301",
+                        "ip_address": "203.0.113.88",
+                        "ip_country": "US",
+                        "is_vpn": false,
+                        "is_proxy": false,
+                        "is_tor": false
+                      },
+                      "device": {
+                        "device_id": "dev_agent_headless_001",
+                        "device_type": "server",
+                        "os": "Linux",
+                        "os_version": "6.1",
+                        "app_version": "agent_runtime_2.0",
+                        "user_agent": "FCPAgent/2.0 (headless; Linux)",
+                        "is_emulator": false,
+                        "is_rooted": false
+                      },
+                      "risk": {
+                        "session_age_seconds": 0,
+                        "is_new_device": false,
+                        "previous_orders_count": 12,
+                        "account_age_days": 730,
+                        "velocity_last_1h": 0,
+                        "velocity_last_24h": 1,
+                        "risk_score": 5,
+                        "risk_signals": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created. CartMandate issued with computed grand_total.\nStatus: `pending_mandate`.\nAgent should now present the CartMandate to the user for review,\nhandler selection, and counter-signature, then call complete.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Duplicate idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "451": {
+            "description": "Geo-restricted \u2014 merchant cannot sell to location in client_context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "geo_restricted",
+                    "message": "Merchant cannot ship to IR",
+                    "field": "client_context.location.country"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/checkouts/{session_id}": {
+      "get": {
+        "tags": [
+          "Checkout"
+        ],
+        "operationId": "getCheckout",
+        "summary": "Retrieve a checkout session",
+        "description": "Returns current session state. Recommended: call GET immediately before\ncomplete to confirm the CartMandate hasn't been invalidated by a\nmerchant-side change (inventory drop, pricing update).\n\nThe response always includes the current CartMandate and\n`available_payment_handlers` so the agent can re-render the payment\nselection UI if needed without refetching the merchant profile.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/FCPAgent"
+          },
+          {
+            "$ref": "#/components/parameters/FCPVersion"
+          },
+          {
+            "$ref": "#/components/parameters/FCPClientContext"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current session state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Checkout"
+        ],
+        "operationId": "updateCheckout",
+        "summary": "Update cart or buyer details",
+        "description": "Modifies an active session. Any change that affects pricing (add/remove\nitems, discount, shipping address to a different tax zone) invalidates\nthe current CartMandate and triggers a new one \u2014 the agent must\nre-collect the user's counter-signature before completing.\n\nNon-price changes (buyer email, phone, metadata) do not invalidate\nthe CartMandate.\n\nNot accepted: `payment_handler_id` \u2014 that is submitted at complete.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/FCPAgent"
+          },
+          {
+            "$ref": "#/components/parameters/FCPVersion"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCheckoutRequest"
+              },
+              "examples": {
+                "add_item": {
+                  "value": {
+                    "line_items": {
+                      "add": [
+                        {
+                          "catalog_id": "item_mouse_pad",
+                          "quantity": 1
+                        }
+                      ]
+                    }
+                  }
+                },
+                "apply_discount": {
+                  "value": {
+                    "discounts": {
+                      "apply": [
+                        "WELCOME10"
+                      ]
+                    }
+                  }
+                },
+                "update_contact": {
+                  "value": {
+                    "buyer": {
+                      "email": "jane.doe@example.com"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session. If `cart_mandate_invalidated: true`, the agent\nmust re-collect user counter-signature before calling complete.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/checkouts/{session_id}/cancel": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "operationId": "cancelCheckout",
+        "summary": "Cancel a checkout session",
+        "description": "Terminates the session from any pre-completion state.\n- CartMandate is cryptographically voided\n- CP is notified to invalidate any pre-staged token for this mandate_id\n- CancelRecord appended to mandate chain for audit\n\nIdempotent. Cannot cancel a completed session.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/FCPAgent"
+          },
+          {
+            "$ref": "#/components/parameters/FCPVersion"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session cancelled; mandate voided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Cannot cancel a completed session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/checkouts/{session_id}/complete": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "operationId": "completeCheckout",
+        "summary": "Complete the checkout \u2014 submit signed mandate and payment handler",
+        "description": "Phase 2 \u2014 AUTHORISE AND FIRE.\n\nThe agent submits three things:\n1. **`cart_mandate`** \u2014 the CartMandate with the user's counter-signature.\n   This is the purchase authorisation. It contains `session_id` inside its\n   signed payload \u2014 the cryptographic link to the checkout session.\n2. **`payment_handler_id`** \u2014 which handler to use. This is a reference,\n   not a credential. The merchant uses it to call the correct Credential\n   Provider server-to-server. The agent never sees the token.\n3. **`confirm_total`** \u2014 the agent echoes the grand_total it expects to be\n   charged. Must match the CartMandate. Guards against price drift.\n\n### Why `payment_handler_id` is here and not in a separate endpoint\nThe handler is an execution reference, not part of the purchase agreement.\nIt does not need to be inside the signed CartMandate, and it does not need\nits own round trip. Submitting it at complete is correct \u2014 it is the\ninstruction to the merchant for how to execute the payment, delivered at\nthe moment of authorisation.\n\n### What the merchant does with it\n```\nmerchant.resolve_payment(\n  mandate_id:   cart_mandate.mandate_id,\n  handler_id:   payment_handler_id,    \u2190 from this request\n  grand_total:  cart_mandate.grand_total\n)\n\u2192 CP delivers token to PSP directly\n\u2192 PSP captures\n\u2192 merchant creates order\n```\n\nThe agent never touches the token.\n\n### Verification sequence\n1. Session status == `ready`\n2. `cart_mandate.session_id` == URL `session_id`\n3. Merchant signature on CartMandate is valid\n4. User counter-signature (or agent auto-sig) is valid\n5. `cart_mandate.grand_total` == server-recomputed total\n6. `confirm_total` == `cart_mandate.grand_total`\n7. IntentMandate constraints still satisfied\n8. `payment_handler_id` is declared in merchant profile\n9. Merchant calls CP \u2192 CP delivers token to PSP \u2192 PSP captures\n10. Order created\n\n**Idempotency key required.**\n**Irreversible** once `status: completed` is returned.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/FCPAgent"
+          },
+          {
+            "$ref": "#/components/parameters/FCPVersion"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteCheckoutRequest"
+              },
+              "examples": {
+                "human_present": {
+                  "summary": "Human-present completion with client_context delta check",
+                  "value": {
+                    "confirm_total": 84.98,
+                    "currency": "USD",
+                    "payment_handler_id": "handler_google_pay",
+                    "cart_mandate": {
+                      "mandate_id": "cm_001",
+                      "session_id": "fcp_sess_a1b2c3d4e5f6g7h8",
+                      "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+                      "user_counter_signature": "eyJhbGciOiJFUzI1NiJ9.user...",
+                      "signed_at": "2026-03-24T09:44:00Z"
+                    },
+                    "client_context": {
+                      "location": {
+                        "country": "US",
+                        "region": "GA",
+                        "postal_code": "30301",
+                        "ip_address": "203.0.113.42",
+                        "ip_country": "US",
+                        "is_vpn": false,
+                        "is_proxy": false,
+                        "is_tor": false
+                      },
+                      "device": {
+                        "device_id": "dev_a1b2c3d4e5f6",
+                        "device_type": "mobile",
+                        "os": "iOS",
+                        "os_version": "18.2",
+                        "app_version": "4.1.0",
+                        "user_agent": "FCPAgent/4.1.0 (iOS 18.2; iPhone)",
+                        "fingerprint": "fp_7f8e9d0a1b2c3d4e",
+                        "is_emulator": false,
+                        "is_rooted": false
+                      },
+                      "risk": {
+                        "session_age_seconds": 310,
+                        "is_new_device": false,
+                        "previous_orders_count": 7,
+                        "account_age_days": 412,
+                        "velocity_last_1h": 1,
+                        "velocity_last_24h": 2,
+                        "risk_score": 14,
+                        "risk_signals": []
+                      }
+                    }
+                  }
+                },
+                "autonomous": {
+                  "summary": "Autonomous agent completion",
+                  "value": {
+                    "confirm_total": 34.99,
+                    "currency": "USD",
+                    "payment_handler_id": "handler_stripe_card",
+                    "cart_mandate": {
+                      "mandate_id": "cm_002",
+                      "session_id": "fcp_sess_z9y8x7w6v5u4t3s2",
+                      "merchant_signature": "eyJhbGciOiJFUzI1NiJ9.merchant...",
+                      "agent_auto_signature": "eyJhbGciOiJFUzI1NiJ9.agent...",
+                      "signed_at": "2026-03-24T08:00:00Z"
+                    },
+                    "client_context": {
+                      "location": {
+                        "country": "US",
+                        "region": "GA",
+                        "postal_code": "30301",
+                        "ip_address": "203.0.113.88",
+                        "ip_country": "US",
+                        "is_vpn": false,
+                        "is_proxy": false,
+                        "is_tor": false
+                      },
+                      "device": {
+                        "device_id": "dev_agent_headless_001",
+                        "device_type": "server",
+                        "os": "Linux",
+                        "os_version": "6.1",
+                        "app_version": "agent_runtime_2.0",
+                        "user_agent": "FCPAgent/2.0 (headless; Linux)",
+                        "is_emulator": false,
+                        "is_rooted": false
+                      },
+                      "risk": {
+                        "session_age_seconds": 5,
+                        "is_new_device": false,
+                        "previous_orders_count": 12,
+                        "account_age_days": 730,
+                        "velocity_last_1h": 0,
+                        "velocity_last_24h": 1,
+                        "risk_score": 5,
+                        "risk_signals": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout completed. Payment settled CP\u2192PSP direct. Order created.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "description": "Payment declined by PSP or token resolution failed at CP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "payment_declined": {
+                    "value": {
+                      "error": {
+                        "code": "payment_declined",
+                        "message": "PSP declined: insufficient funds",
+                        "psp_decline_code": "insufficient_funds",
+                        "mandate_id": "cm_001"
+                      }
+                    }
+                  },
+                  "cp_failed": {
+                    "value": {
+                      "error": {
+                        "code": "cp_token_resolution_failed",
+                        "message": "Credential Provider could not resolve token for mandate cm_001",
+                        "mandate_id": "cm_001"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "description": "Mandate or amount verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "session_mismatch": {
+                    "value": {
+                      "error": {
+                        "code": "session_mismatch",
+                        "message": "cart_mandate.session_id does not match URL session_id",
+                        "field": "cart_mandate.session_id"
+                      }
+                    }
+                  },
+                  "amount_mismatch": {
+                    "value": {
+                      "error": {
+                        "code": "amount_mismatch",
+                        "message": "confirm_total 95.00 does not match cart_mandate.grand_total 94.98",
+                        "field": "confirm_total"
+                      }
+                    }
+                  },
+                  "not_ready": {
+                    "value": {
+                      "error": {
+                        "code": "invalid_state",
+                        "message": "CartMandate awaiting user counter-signature.",
+                        "session_status": "pending_mandate"
+                      }
+                    }
+                  },
+                  "constraint_violated": {
+                    "value": {
+                      "error": {
+                        "code": "mandate_constraint_violated",
+                        "message": "Cart total $94.98 exceeds IntentMandate max_amount $50.00",
+                        "mandate_id": "im_001"
+                      }
+                    }
+                  },
+                  "unknown_handler": {
+                    "value": {
+                      "error": {
+                        "code": "unknown_payment_handler",
+                        "message": "handler_xyz is not declared in the merchant profile",
+                        "field": "payment_handler_id"
+                      }
+                    }
+                  },
+                  "device_mismatch": {
+                    "value": {
+                      "error": {
+                        "code": "device_mismatch",
+                        "message": "device_id at complete differs from create. Possible session hijack.",
+                        "field": "client_context.device.device_id"
+                      }
+                    }
+                  },
+                  "location_changed": {
+                    "value": {
+                      "error": {
+                        "code": "location_changed",
+                        "message": "location.country changed between create and complete.",
+                        "field": "client_context.location.country"
+                      }
+                    }
+                  },
+                  "high_risk": {
+                    "value": {
+                      "error": {
+                        "code": "risk_threshold_exceeded",
+                        "message": "Risk score 87 exceeds merchant threshold. SCA required.",
+                        "field": "client_context.risk.risk_score"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/mandates/verify": {
+      "post": {
+        "tags": [
+          "Mandates"
+        ],
+        "operationId": "verifyMandate",
+        "summary": "Verify a mandate chain",
+        "description": "Utility for PSPs, auditors, and dispute resolution.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MandateVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MandateVerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.merchant.example/oauth/token",
+            "scopes": {
+              "fcp.checkout": "Checkout sessions"
+            }
+          },
+          "authorizationCode": {
+            "authorizationUrl": "https://auth.merchant.example/oauth/authorize",
+            "tokenUrl": "https://auth.merchant.example/oauth/token",
+            "scopes": {
+              "fcp.checkout": "Checkout sessions"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "SessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^fcp_sess_[a-zA-Z0-9]{16,32}$"
+        },
+        "example": "fcp_sess_a1b2c3d4e5f6g7h8"
+      },
+      "IdempotencyKey": {
+        "name": "FCP-Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "UUID. Required on all POST requests.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "550e8400-e29b-41d4-a716-446655440000"
+      },
+      "FCPAgent": {
+        "name": "FCP-Agent",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "example": "profile=\"https://my-agent.example/profiles/shopping-agent.json\""
+      },
+      "FCPVersion": {
+        "name": "FCP-Version",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "default": "1.3"
+        }
+      },
+      "FCPClientContext": {
+        "name": "FCP-Client-Context",
+        "in": "header",
+        "required": false,
+        "description": "base64url-encoded JSON ClientContext. Required on all GET requests.\nOn POST/PATCH requests include client_context in the request body instead.",
+        "schema": {
+          "type": "string",
+          "format": "byte"
+        },
+        "example": "eyJsb2NhdGlvbiI6eyJjb3VudHJ5IjoiVVMifX0="
+      }
+    },
+    "schemas": {
+      "MerchantProfile": {
+        "type": "object",
+        "required": [
+          "fcp_version",
+          "merchant_id",
+          "capabilities",
+          "payment_handlers"
+        ],
+        "properties": {
+          "fcp_version": {
+            "type": "string",
+            "example": "1.3"
+          },
+          "merchant_id": {
+            "type": "string",
+            "example": "merch_abc123"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "Acme Electronics"
+          },
+          "profile_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityDeclaration"
+            }
+          },
+          "payment_handlers": {
+            "type": "array",
+            "description": "Available payment handlers. The agent presents this list to the user\nafter the CartMandate is issued (price is now known) and the user\nselects one. The selected `id` is submitted in CompleteCheckoutRequest.\nNo separate API call needed for selection.\n",
+            "items": {
+              "$ref": "#/components/schemas/PaymentHandler"
+            }
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "fcp.ext.loyalty",
+              "fcp.ext.subscriptions"
+            ]
+          },
+          "trust_anchor": {
+            "$ref": "#/components/schemas/TrustAnchor"
+          },
+          "discount_policy": {
+            "$ref": "#/components/schemas/DiscountPolicy"
+          },
+          "loyalty_program": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyProgram"
+              }
+            ],
+            "description": "Present when fcp.loyalty capability is declared."
+          }
+        }
+      },
+      "CapabilityDeclaration": {
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "endpoint"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "fcp.checkout",
+              "fcp.loyalty",
+              "fcp.identity"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "supported_modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "human_present",
+                "human_not_present"
+              ]
+            }
+          }
+        }
+      },
+      "PaymentHandler": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "description": "A payment handler declaration. The `id` is what gets submitted in\nCompleteCheckoutRequest.payment_handler_id. The merchant maps this `id`\nto the correct Credential Provider server-side \u2014 the agent only knows\nthe display name and icon for rendering the selection UI.\n",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "handler_google_pay"
+          },
+          "name": {
+            "type": "string",
+            "example": "Google Pay"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "delegated_token",
+              "direct_card",
+              "bank_transfer",
+              "stablecoin"
+            ]
+          },
+          "display_icon_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "constraints": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional handler constraints (geo, currency, max_amount)"
+          }
+        }
+      },
+      "TrustAnchor": {
+        "type": "object",
+        "properties": {
+          "did": {
+            "type": "string",
+            "example": "did:web:acme.example"
+          },
+          "signing_key_jwk": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "CreateCheckoutRequest": {
+        "type": "object",
+        "required": [
+          "mode",
+          "line_items",
+          "buyer",
+          "intent_mandate",
+          "client_context"
+        ],
+        "description": "Cart intent only. No payment_handler_id. No token.\nPayment selection happens client-side after the CartMandate is issued,\nand the selected handler_id is submitted at complete.\n",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/CheckoutMode"
+          },
+          "line_items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/LineItemInput"
+            }
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/Buyer"
+          },
+          "discounts": {
+            "type": "array",
+            "description": "Discounts to attempt to apply at session creation.",
+            "items": {
+              "$ref": "#/components/schemas/DiscountInput"
+            }
+          },
+          "intent_mandate": {
+            "$ref": "#/components/schemas/IntentMandate"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "loyalty": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyCheckoutInput"
+              }
+            ],
+            "description": "Loyalty redemption for this checkout. Optional."
+          }
+        }
+      },
+      "UpdateCheckoutRequest": {
+        "type": "object",
+        "description": "Cart and buyer updates. Does NOT accept payment_handler_id \u2014\nthat is submitted at complete.\n",
+        "properties": {
+          "line_items": {
+            "type": "object",
+            "properties": {
+              "add": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LineItemInput"
+                }
+              },
+              "remove": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "line_item_id values to remove"
+              }
+            }
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/Buyer"
+          },
+          "discounts": {
+            "type": "object",
+            "properties": {
+              "apply": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DiscountInput"
+                }
+              },
+              "remove": {
+                "type": "array",
+                "description": "discount_id values to remove.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "loyalty": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyCheckoutInput"
+              }
+            ],
+            "description": "Update loyalty redemption amount."
+          }
+        },
+        "required": [
+          "client_context"
+        ]
+      },
+      "CancelRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "user_abandoned",
+              "item_unavailable",
+              "payment_handler_unavailable",
+              "mandate_expired",
+              "merchant_initiated",
+              "agent_error",
+              "session_timeout",
+              "other"
+            ]
+          },
+          "initiated_by": {
+            "type": "string",
+            "enum": [
+              "consumer_agent",
+              "merchant_agent",
+              "system"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          }
+        }
+      },
+      "CompleteCheckoutRequest": {
+        "type": "object",
+        "required": [
+          "confirm_total",
+          "currency",
+          "payment_handler_id",
+          "cart_mandate",
+          "client_context"
+        ],
+        "description": "The terminal action. Three fields, three purposes:\n\n1. `cart_mandate` \u2014 the purchase authorisation. Contains session_id\n   inside the merchant's signature, cryptographically linking this\n   complete request to the checkout session.\n\n2. `payment_handler_id` \u2014 execution reference. Tells the merchant which\n   Credential Provider to call. Not a credential \u2014 just an identifier.\n   The merchant resolves the actual token server-to-server using the\n   mandate_id. The agent never sees the token.\n\n3. `confirm_total` \u2014 safeguard. The agent echoes the amount it expects\n   to be charged. Rejected if it doesn't match cart_mandate.grand_total.\n\nNothing else is needed. All other context (items, price, merchant,\nintent constraints) is inside the signed CartMandate.\n",
+        "properties": {
+          "confirm_total": {
+            "type": "number",
+            "format": "double",
+            "description": "Must match cart_mandate.grand_total to the cent.\nGuards against silent price drift between session creation and completion.\n",
+            "example": 94.98
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "payment_handler_id": {
+            "type": "string",
+            "description": "ID of a handler declared in the merchant's capability profile.\nThe agent presents the handler list (from the profile) to the user\nafter CREATE; the user picks one; this field carries that choice.\nThe merchant uses this to call the correct CP at settlement time.\nThe agent never receives or submits the resulting token.\n",
+            "example": "handler_google_pay"
+          },
+          "cart_mandate": {
+            "$ref": "#/components/schemas/CartMandateSigned"
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          }
+        }
+      },
+      "CheckoutSession": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "example": "fcp_sess_a1b2c3d4e5f6g7h8"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/CheckoutMode"
+          },
+          "merchant_id": {
+            "type": "string",
+            "example": "merch_abc123"
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineItemResolved"
+            }
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/Buyer"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/Totals"
+          },
+          "discounts_applied": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppliedDiscount"
+            }
+          },
+          "cart_mandate": {
+            "$ref": "#/components/schemas/CartMandateIssued",
+            "description": "Current merchant-signed CartMandate. Contains grand_total and\nsession_id inside the signed payload. The agent presents this to\nthe user for review and counter-signature before calling complete.\n"
+          },
+          "cart_mandate_invalidated": {
+            "type": "boolean",
+            "description": "True when a previous CartMandate was voided by this update.\nAgent must re-collect the user's counter-signature.\n",
+            "example": false
+          },
+          "available_payment_handlers": {
+            "type": "array",
+            "description": "Handlers available for this session. Present these to the user\nafter showing the CartMandate (so they know the final price before\nselecting a payment method). The selected handler's `id` goes into\nCompleteCheckoutRequest.payment_handler_id.\n",
+            "items": {
+              "$ref": "#/components/schemas/PaymentHandlerSummary"
+            }
+          },
+          "mandate_chain": {
+            "$ref": "#/components/schemas/MandateChainSummary"
+          },
+          "available_actions": {
+            "type": "array",
+            "description": "Actions the agent may take from this state",
+            "items": {
+              "type": "string",
+              "enum": [
+                "update",
+                "cancel",
+                "complete"
+              ]
+            },
+            "example": [
+              "update",
+              "cancel",
+              "complete"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "15 min for human_present; 24 hr for human_not_present"
+          },
+          "discounts_rejected": {
+            "type": "array",
+            "description": "Discounts submitted but not applied (invalid code, expired, non-stackable). Session still created.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "$ref": "#/components/schemas/DiscountInput"
+                },
+                "reason": {
+                  "type": "string",
+                  "example": "Code expired"
+                }
+              }
+            }
+          },
+          "loyalty_session": {
+            "type": "object",
+            "description": "Loyalty state for this session (present when loyalty account attached).",
+            "properties": {
+              "account_id": {
+                "type": "string",
+                "example": "loyalty_jane_001"
+              },
+              "points_balance": {
+                "type": "integer",
+                "description": "Current balance shown to user.",
+                "example": 3500
+              },
+              "points_redeemed": {
+                "type": "integer",
+                "example": 1000
+              },
+              "redemption_value_usd": {
+                "type": "number",
+                "format": "double",
+                "example": 10.0
+              },
+              "projected_earn": {
+                "type": "integer",
+                "description": "Points user earns if they complete this checkout.",
+                "example": 750
+              }
+            }
+          },
+          "risk_decision": {
+            "type": "object",
+            "description": "Merchant's risk assessment of this session (informational).",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "step_up",
+                  "review",
+                  "block"
+                ],
+                "example": "allow"
+              },
+              "sca_required": {
+                "type": "boolean",
+                "example": false
+              },
+              "reason": {
+                "type": "string",
+                "example": "Low risk score; known device"
+              }
+            }
+          }
+        }
+      },
+      "CancelResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "cancelled"
+            ]
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "mandate_voided": {
+            "type": "boolean",
+            "example": true
+          },
+          "cp_notified": {
+            "type": "boolean",
+            "description": "Whether CP was notified to void any pre-staged token for this mandate",
+            "example": true
+          },
+          "cancel_record_id": {
+            "type": "string",
+            "example": "cr_fcp_00987"
+          }
+        }
+      },
+      "CompleteResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed"
+            ]
+          },
+          "order_id": {
+            "type": "string",
+            "example": "ord_20260324_00123"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "grand_total": {
+            "type": "number",
+            "format": "double",
+            "example": 94.98
+          },
+          "currency": {
+            "type": "string"
+          },
+          "settlement": {
+            "$ref": "#/components/schemas/SettlementRecord"
+          },
+          "mandate_chain": {
+            "$ref": "#/components/schemas/MandateChainSummary"
+          },
+          "receipt_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "discounts_applied": {
+            "type": "array",
+            "description": "Discounts that were applied on this completed order.",
+            "items": {
+              "$ref": "#/components/schemas/AppliedDiscount"
+            }
+          },
+          "loyalty_result": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoyaltyCheckoutResult"
+              }
+            ],
+            "description": "Present when loyalty account was attached to session."
+          }
+        }
+      },
+      "IntentMandate": {
+        "type": "object",
+        "required": [
+          "mandate_id",
+          "signed_by",
+          "constraints",
+          "signature"
+        ],
+        "description": "User-signed shopping intent. Authorises the agent to act within\ndefined constraints. Both human_present and human_not_present flows\nrequire an IntentMandate.\n",
+        "properties": {
+          "mandate_id": {
+            "type": "string",
+            "example": "im_001"
+          },
+          "signed_by": {
+            "type": "string",
+            "description": "DID of the signing key",
+            "example": "did:key:zAgent123"
+          },
+          "constraints": {
+            "type": "object",
+            "required": [
+              "max_amount",
+              "currency",
+              "expires_at"
+            ],
+            "properties": {
+              "max_amount": {
+                "type": "number",
+                "format": "double",
+                "example": 300.0
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "merchant_id": {
+                "type": "string",
+                "description": "Restricts mandate to one merchant if set"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "allowed_categories": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "recurrence": {
+                "type": "string",
+                "enum": [
+                  "once",
+                  "daily",
+                  "weekly",
+                  "monthly",
+                  "yearly"
+                ]
+              }
+            }
+          },
+          "signature": {
+            "type": "string",
+            "example": "eyJhbGciOiJFUzI1NiJ9..."
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CartMandateIssued": {
+        "type": "object",
+        "description": "Merchant-signed CartMandate returned in the session response.\nContains session_id inside the signed payload \u2014 this is the\ncryptographic association between the checkout session and the\ncomplete request that will reference it.\n",
+        "properties": {
+          "mandate_id": {
+            "type": "string",
+            "example": "cm_001"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Inside the merchant's signature. Binds this mandate to the session.\nWhen the agent submits this mandate in complete, the merchant\nextracts and verifies session_id from the signed payload \u2014 not\njust from the URL.\n",
+            "example": "fcp_sess_a1b2c3d4e5f6g7h8"
+          },
+          "intent_mandate_id": {
+            "type": "string",
+            "example": "im_001"
+          },
+          "merchant_id": {
+            "type": "string",
+            "example": "merch_abc123"
+          },
+          "line_item_snapshot": {
+            "type": "array",
+            "description": "Immutable cart snapshot at mandate issuance time",
+            "items": {
+              "$ref": "#/components/schemas/LineItemResolved"
+            }
+          },
+          "grand_total": {
+            "type": "number",
+            "format": "double",
+            "description": "The exact amount that will be charged",
+            "example": 94.98
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "merchant_signature": {
+            "type": "string",
+            "description": "JWS over the full CartMandate payload",
+            "example": "eyJhbGciOiJFUzI1NiJ9.merchant..."
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "discounts_snapshot": {
+            "type": "array",
+            "description": "Discounts locked into this mandate at issuance \u2014 immutable once signed.",
+            "items": {
+              "$ref": "#/components/schemas/AppliedDiscount"
+            }
+          }
+        }
+      },
+      "CartMandateSigned": {
+        "type": "object",
+        "required": [
+          "mandate_id",
+          "session_id",
+          "merchant_signature"
+        ],
+        "description": "The CartMandate as submitted in CompleteCheckoutRequest.\nMerchant signature is unchanged from CartMandateIssued.\nUser's counter-signature (or agent auto-sig) is added by the agent.\n",
+        "properties": {
+          "mandate_id": {
+            "type": "string",
+            "example": "cm_001"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Must match the URL session_id. Verified inside the merchant\nsignature \u2014 cannot be altered without breaking the signature.\n",
+            "example": "fcp_sess_a1b2c3d4e5f6g7h8"
+          },
+          "merchant_signature": {
+            "type": "string",
+            "description": "Unchanged from CartMandateIssued",
+            "example": "eyJhbGciOiJFUzI1NiJ9.merchant..."
+          },
+          "user_counter_signature": {
+            "type": "string",
+            "description": "User's JWS counter-signature (human_present)",
+            "example": "eyJhbGciOiJFUzI1NiJ9.user..."
+          },
+          "agent_auto_signature": {
+            "type": "string",
+            "description": "Agent JWS auto-sig (human_not_present, within IntentMandate bounds)",
+            "example": "eyJhbGciOiJFUzI1NiJ9.agent..."
+          },
+          "signed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MandateChainSummary": {
+        "type": "object",
+        "properties": {
+          "intent_mandate_id": {
+            "type": "string"
+          },
+          "intent_mandate_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "expired",
+              "violated",
+              "revoked"
+            ]
+          },
+          "cart_mandate_id": {
+            "type": "string"
+          },
+          "cart_mandate_status": {
+            "type": "string",
+            "enum": [
+              "pending_user_signature",
+              "signed",
+              "voided"
+            ]
+          },
+          "settlement_mandate_id": {
+            "type": "string"
+          },
+          "settlement_mandate_status": {
+            "type": "string",
+            "enum": [
+              "not_issued",
+              "issued",
+              "settled",
+              "failed"
+            ]
+          }
+        }
+      },
+      "MandateVerifyRequest": {
+        "type": "object",
+        "required": [
+          "mandates"
+        ],
+        "properties": {
+          "mandates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "mandate_type": {
+                  "type": "string",
+                  "enum": [
+                    "intent",
+                    "cart",
+                    "settlement"
+                  ]
+                },
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "signature": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "MandateVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "overall_valid": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "mandate_id": {
+                  "type": "string"
+                },
+                "valid": {
+                  "type": "boolean"
+                },
+                "violations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "SettlementRecord": {
+        "type": "object",
+        "description": "PSP settlement record. No token value here \u2014 the token was exchanged\ndirectly between CP and PSP. Only the PSP's transaction reference is\nsurfaced to the merchant and agent.\n",
+        "properties": {
+          "settlement_mandate_id": {
+            "type": "string",
+            "example": "sm_001"
+          },
+          "psp_transaction_id": {
+            "type": "string",
+            "example": "psp_txn_abc123"
+          },
+          "amount_captured": {
+            "type": "number",
+            "format": "double",
+            "example": 94.98
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "payment_network": {
+            "type": "string",
+            "example": "VISA"
+          },
+          "network_auth_code": {
+            "type": "string",
+            "example": "AUTH_20260324_XYZ"
+          },
+          "settled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CheckoutMode": {
+        "type": "string",
+        "enum": [
+          "human_present",
+          "human_not_present"
+        ],
+        "description": "human_present: User actively engaged. CartMandate signed in-session. TTL 15 min.\nhuman_not_present: Agent acts autonomously under pre-signed IntentMandate. TTL 24 hr."
+      },
+      "SessionStatus": {
+        "type": "string",
+        "description": "pending_mandate \u2014 CartMandate issued; user reviewing price, selecting\n                  handler client-side, counter-signing. No API call\n                  needed during this phase.\nready           \u2014 User has counter-signed (agent has the signed mandate).\n                  Safe to call complete.\ncompleted       \u2014 Payment settled; order created. Terminal.\ncancelled       \u2014 Voided before completion. Terminal.\nexpired         \u2014 TTL elapsed. Terminal. Create a new session.\n",
+        "enum": [
+          "pending_mandate",
+          "ready",
+          "completed",
+          "cancelled",
+          "expired"
+        ]
+      },
+      "LineItemInput": {
+        "type": "object",
+        "required": [
+          "catalog_id",
+          "quantity"
+        ],
+        "properties": {
+          "catalog_id": {
+            "type": "string",
+            "example": "item_headphones_pro"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "customizations": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "LineItemResolved": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LineItemInput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "line_item_id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "unit_price": {
+                "type": "number",
+                "format": "double"
+              },
+              "line_total": {
+                "type": "number",
+                "format": "double"
+              },
+              "in_stock": {
+                "type": "boolean"
+              },
+              "image_url": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        ]
+      },
+      "Buyer": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "shipping_address": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "billing_address": {
+            "$ref": "#/components/schemas/Address"
+          }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "required": [
+          "name",
+          "line1",
+          "city",
+          "state",
+          "postal_code",
+          "country"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "line1": {
+            "type": "string"
+          },
+          "line2": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "postal_code": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          }
+        }
+      },
+      "Totals": {
+        "type": "object",
+        "properties": {
+          "subtotal": {
+            "type": "number",
+            "format": "double"
+          },
+          "discount_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "tax_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "shipping_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "grand_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "loyalty_discount": {
+            "type": "number",
+            "format": "double",
+            "description": "Dollar value of loyalty points redeemed as discount."
+          }
+        }
+      },
+      "AppliedDiscount": {
+        "type": "object",
+        "description": "A discount successfully applied, reflected in totals.",
+        "properties": {
+          "discount_id": {
+            "type": "string",
+            "description": "Server-assigned ID for this discount instance.",
+            "example": "disc_001"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PROMO_CODE",
+              "AUTOMATIC",
+              "LOYALTY_REDEMPTION",
+              "AGENT_OFFER",
+              "BUNDLE"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "Code used (PROMO_CODE only).",
+            "example": "SUMMER15"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable label for display.",
+            "example": "Summer Sale \u2014 15% off"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "order",
+              "line_item",
+              "shipping"
+            ],
+            "example": "order"
+          },
+          "value_type": {
+            "type": "string",
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              "free_shipping"
+            ],
+            "example": "percentage"
+          },
+          "value": {
+            "type": "number",
+            "format": "double",
+            "description": "Percentage or fixed amount.",
+            "example": 15
+          },
+          "amount_saved": {
+            "type": "number",
+            "format": "double",
+            "description": "Actual dollar amount deducted.",
+            "example": 15.9
+          },
+          "stackable": {
+            "type": "boolean",
+            "example": true
+          },
+          "loyalty_points_redeemed": {
+            "type": "integer",
+            "description": "Points consumed (LOYALTY_REDEMPTION only).",
+            "example": 1000
+          }
+        }
+      },
+      "PaymentHandlerSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "handler_google_pay"
+          },
+          "name": {
+            "type": "string",
+            "example": "Google Pay"
+          },
+          "type": {
+            "type": "string"
+          },
+          "display_icon_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "session_status": {
+                "type": "string"
+              },
+              "mandate_id": {
+                "type": "string"
+              },
+              "psp_decline_code": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ClientContext": {
+        "type": "object",
+        "required": [
+          "location",
+          "device",
+          "risk"
+        ],
+        "description": "Required on every FCP request. Location, device, and risk signals used for tax jurisdiction, fraud scoring, geo-restrictions, SCA decisions, and audit.\n\nOn GET requests: submit as FCP-Client-Context header (base64url-encoded JSON).\nOn POST/PATCH requests: submit as client_context field in the request body.",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationContext"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceContext"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/RiskContext"
+          }
+        }
+      },
+      "LocationContext": {
+        "type": "object",
+        "required": [
+          "country",
+          "ip_address"
+        ],
+        "description": "Geographic origin of the request. Used for:\n- Tax jurisdiction determination (country + region + postal_code)\n- Geo-restricted product screening\n- Sanctions / OFAC country checks\n- PSD2 SCA threshold determination (EU)\n- GDPR region identification",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "GPS latitude. Omit for server-side agents.",
+            "example": 33.749
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "GPS longitude.",
+            "example": -84.388
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "description": "ISO 3166-1 alpha-2 country code derived from GPS or IP.",
+            "example": "US"
+          },
+          "region": {
+            "type": "string",
+            "description": "State / province / region code.",
+            "example": "GA"
+          },
+          "city": {
+            "type": "string",
+            "example": "Atlanta"
+          },
+          "postal_code": {
+            "type": "string",
+            "description": "Used for precise tax jurisdiction resolution.",
+            "example": "30301"
+          },
+          "ip_address": {
+            "type": "string",
+            "description": "IPv4 or IPv6 of the requesting client.",
+            "example": "203.0.113.42"
+          },
+          "ip_country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "description": "Country resolved from IP geolocation. May differ from GPS country \u2014 mismatch is a risk signal.",
+            "example": "US"
+          },
+          "is_vpn": {
+            "type": "boolean",
+            "description": "IP identified as a known VPN exit node.",
+            "example": false
+          },
+          "is_proxy": {
+            "type": "boolean",
+            "description": "IP identified as an open or commercial proxy.",
+            "example": false
+          },
+          "is_tor": {
+            "type": "boolean",
+            "description": "IP identified as a Tor exit node.",
+            "example": false
+          }
+        }
+      },
+      "DeviceContext": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_type",
+          "user_agent"
+        ],
+        "description": "Device and client identity. Used for:\n- Known-device trust scoring (recognised device = lower friction)\n- Session hijack detection: device_id mismatch between create and complete triggers alert\n- Agent vs human traffic classification\n- Fraud pattern matching against device fingerprint",
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "description": "Stable per-device ID. Must be consistent across the session \u2014 mismatch between create and complete triggers a security alert.",
+            "example": "dev_a1b2c3d4e5f6"
+          },
+          "device_type": {
+            "type": "string",
+            "enum": [
+              "mobile",
+              "tablet",
+              "desktop",
+              "wearable",
+              "tv",
+              "server",
+              "iot",
+              "unknown"
+            ],
+            "example": "mobile"
+          },
+          "os": {
+            "type": "string",
+            "example": "iOS"
+          },
+          "os_version": {
+            "type": "string",
+            "example": "18.2"
+          },
+          "app_version": {
+            "type": "string",
+            "description": "Version of the agent app or runtime.",
+            "example": "4.1.0"
+          },
+          "user_agent": {
+            "type": "string",
+            "description": "Full User-Agent string.",
+            "example": "FCPAgent/4.1.0 (iOS 18.2; iPhone)"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "Hardware/software hash for cross-session fraud correlation.",
+            "example": "fp_7f8e9d0a1b2c3d4e"
+          },
+          "is_emulator": {
+            "type": "boolean",
+            "description": "Device is a software emulator \u2014 associated with automated fraud tooling.",
+            "example": false
+          },
+          "is_rooted": {
+            "type": "boolean",
+            "description": "OS has been rooted or jailbroken \u2014 weakened key storage, elevated risk.",
+            "example": false
+          },
+          "screen_resolution": {
+            "type": "string",
+            "description": "WxH pixels (mobile/desktop only).",
+            "example": "390x844"
+          },
+          "language": {
+            "type": "string",
+            "description": "Device/app locale.",
+            "example": "en-US"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone.",
+            "example": "America/New_York"
+          }
+        }
+      },
+      "RiskContext": {
+        "type": "object",
+        "description": "Behavioural and account-level risk signals computed by the agent app or a client-side risk SDK. Merchant combines with server-side scoring. A risk_score above the merchant threshold triggers SCA (step-up auth) or rejection.",
+        "properties": {
+          "session_age_seconds": {
+            "type": "integer",
+            "description": "Active session duration in seconds. Very short + high-value order = automated fraud pattern.",
+            "example": 142
+          },
+          "is_new_device": {
+            "type": "boolean",
+            "description": "First-seen device_id for this user.",
+            "example": false
+          },
+          "previous_orders_count": {
+            "type": "integer",
+            "description": "Total historical orders by this user at this merchant.",
+            "example": 7
+          },
+          "account_age_days": {
+            "type": "integer",
+            "description": "Age of the user account at this merchant in days.",
+            "example": 412
+          },
+          "velocity_last_1h": {
+            "type": "integer",
+            "description": "Checkout attempts in the last 1 hour.",
+            "example": 1
+          },
+          "velocity_last_24h": {
+            "type": "integer",
+            "description": "Checkout attempts in the last 24 hours.",
+            "example": 2
+          },
+          "risk_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Composite score 0\u2013100. 0 = no risk, 100 = max risk. Merchant configures thresholds: e.g. >70 = SCA required, >90 = reject.",
+            "example": 12
+          },
+          "risk_signals": {
+            "type": "array",
+            "description": "Discrete flags contributing to risk_score. Empty array means no signals triggered.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "new_shipping_address",
+                "shipping_billing_mismatch",
+                "high_value_first_order",
+                "rapid_cart_assembly",
+                "multiple_payment_attempts",
+                "unusual_time_of_day",
+                "ip_country_mismatch",
+                "device_fingerprint_mismatch",
+                "account_recently_created",
+                "password_recently_changed"
+              ]
+            },
+            "example": []
+          },
+          "three_ds_exemption_claimed": {
+            "type": "string",
+            "description": "PSD2 3DS exemption reason if claimed. Null = no exemption, SCA proceeds normally.",
+            "enum": [
+              "low_value",
+              "trusted_beneficiary",
+              "recurring_transaction",
+              "corporate_payment",
+              "low_risk_analysis"
+            ],
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "DiscountInput": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "description": "A discount to apply to the checkout. Replaces bare string codes.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PROMO_CODE",
+              "AUTOMATIC",
+              "LOYALTY_REDEMPTION",
+              "AGENT_OFFER",
+              "BUNDLE"
+            ],
+            "description": "PROMO_CODE: user-entered code \u2014 requires code field\nAUTOMATIC: merchant rule \u2014 no input needed\nLOYALTY_REDEMPTION: points redemption \u2014 requires loyalty.redeem_points\nAGENT_OFFER: personalised offer \u2014 requires offer_id\nBUNDLE: bundle pricing \u2014 merchant applies automatically",
+            "example": "PROMO_CODE"
+          },
+          "code": {
+            "type": "string",
+            "description": "Required for PROMO_CODE.",
+            "example": "SUMMER15"
+          },
+          "offer_id": {
+            "type": "string",
+            "description": "Required for AGENT_OFFER.",
+            "example": "offer_abc123"
+          },
+          "loyalty_points": {
+            "type": "integer",
+            "description": "Points being redeemed \u2014 informational for LOYALTY_REDEMPTION.",
+            "example": 1000
+          }
+        }
+      },
+      "DiscountPolicy": {
+        "type": "object",
+        "description": "Merchant discount stacking rules declared in the capability profile.",
+        "properties": {
+          "max_discounts_per_order": {
+            "type": "integer",
+            "description": "Maximum stackable discounts per order.",
+            "example": 3
+          },
+          "stackable_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "PROMO_CODE",
+              "LOYALTY_REDEMPTION",
+              "AUTOMATIC"
+            ]
+          },
+          "non_stackable_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "These types cannot be combined with others.",
+            "example": [
+              "BUNDLE"
+            ]
+          }
+        }
+      },
+      "LoyaltyProgram": {
+        "type": "object",
+        "description": "Loyalty programme declaration in the merchant capability profile.",
+        "properties": {
+          "program_id": {
+            "type": "string",
+            "example": "acme_rewards"
+          },
+          "program_name": {
+            "type": "string",
+            "example": "Acme Rewards"
+          },
+          "currency_name": {
+            "type": "string",
+            "description": "Display name for points (Points, Miles, Stars).",
+            "example": "Points"
+          },
+          "earn_rate": {
+            "type": "number",
+            "format": "double",
+            "description": "Points earned per $1 spent.",
+            "example": 10
+          },
+          "earn_rate_description": {
+            "type": "string",
+            "example": "10 points per $1 spent"
+          },
+          "redemption_rate": {
+            "type": "number",
+            "format": "double",
+            "description": "Dollar value of one point.",
+            "example": 0.01
+          },
+          "redemption_rate_description": {
+            "type": "string",
+            "example": "100 points = $1"
+          },
+          "min_redemption_points": {
+            "type": "integer",
+            "description": "Minimum points required to redeem at once.",
+            "example": 500
+          }
+        }
+      },
+      "LoyaltyCheckoutInput": {
+        "type": "object",
+        "description": "Loyalty redemption submitted in CreateCheckout or UpdateCheckout.",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "Loyalty account to attach to this session.",
+            "example": "loyalty_jane_001"
+          },
+          "redeem_points": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Points to redeem. Must be >= min_redemption_points. Converted to a LOYALTY_REDEMPTION discount entry.",
+            "example": 1000
+          }
+        }
+      },
+      "LoyaltyCheckoutResult": {
+        "type": "object",
+        "description": "Loyalty outcome returned in CompleteResponse.",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "example": "loyalty_jane_001"
+          },
+          "points_redeemed": {
+            "type": "integer",
+            "description": "Points redeemed as discount on this order.",
+            "example": 1000
+          },
+          "redemption_value_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Dollar value of redeemed points.",
+            "example": 10.0
+          },
+          "points_earned": {
+            "type": "integer",
+            "description": "Points earned from this purchase (pending settlement).",
+            "example": 750
+          },
+          "new_balance": {
+            "type": "integer",
+            "description": "Projected balance after redemption and earn.",
+            "example": 3250
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid credentials",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "State conflict",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "Business logic validation failure",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Unexpected server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "OAuth2": [
+        "fcp.checkout"
+      ]
+    }
+  ]
+}
