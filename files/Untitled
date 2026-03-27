@@ -1,0 +1,32 @@
+# FCP — Federated Commerce Protocol
+
+**The problem:** Every AI agent that wants to complete a purchase has to build a custom integration with every merchant. Every merchant has to support every agent separately. The result is an N×N integration problem that fragments agentic commerce before it can scale.
+
+**What FCP does:** FCP defines a single common language — a set of open, vendor-neutral APIs — that any agent can speak and any merchant can implement once. A merchant who adopts FCP is instantly reachable by every FCP-compatible agent, without custom builds.
+
+**Where it goes further than existing protocols:** FCP normalises the strongest ideas from UCP, ACP (OpenAI/Stripe), and AP2 (Google) into one spec. It adds a cryptographic mandate chain — three linked digital contracts (IntentMandate → CartMandate → SettlementMandate) — that prove a real user authorised a specific agent to spend a specific amount at a specific merchant. Payment tokens never pass through the agent. Fraud signals, device identity, and location context travel with every call.
+
+**The outcome:** Merchants plug in once and reach all agents. Agents integrate once and reach all merchants. Users get secure, auditable, non-repudiable transactions regardless of which AI surface they shop through.
+
+*Open source · Apache 2.0*
+
+
+FCP — Federated Commerce Protocol
+What It Is
+FCP is an open, vendor-neutral protocol that establishes a common language for agentic commerce. It defines the complete lifecycle of an AI-driven purchase — from a merchant advertising what they sell, through an agent building a cart, to a user authorising payment, through to funds settlement — in a single composable specification. It is not owned by any platform, does not route transactions through any intermediary, and leaves merchants as the Merchant of Record in every transaction.
+FCP draws from the strongest ideas in three existing agentic protocols — UCP (Google/Shopify), ACP (OpenAI/Stripe), and AP2 (Google) — and unifies them into one specification that any agent or merchant can implement without being tied to a specific AI surface or payment provider.
+
+How It Solves the N×N Problem
+Today, every AI agent that wants to complete purchases must build a custom integration with every merchant. Every merchant must support every agent separately. With 100 agents and 10,000 merchants, that is 1,000,000 custom integrations — each brittle, proprietary, and expensive to maintain.
+FCP collapses this to a single implementation on each side. A merchant implements FCP once. Every FCP-compatible agent can now reach that merchant immediately. An agent implements FCP once. Every FCP-compatible merchant is instantly reachable. The integration count drops from N×M to N+M.
+Discovery is the mechanism that makes this work. Merchants publish a capability profile at a well-known URI (/.well-known/fcp) declaring exactly what they support — checkout flows, loyalty programmes, discount policies, and accepted payment handlers. Agents fetch this profile before starting any session. There are no handshakes to negotiate bilaterally, no SDKs to install per merchant, no custom API contracts to sign.
+
+Value Proposition
+For merchants: One implementation reaches the entire agentic commerce ecosystem. They retain full ownership of the customer relationship, pricing logic, fulfillment, and fraud controls. The cryptographic mandate chain gives them legally-admissible evidence for chargeback disputes — something no existing protocol provides natively.
+For agents: One integration reaches all merchants. Agents handle no payment credentials at any point — the payment token flows directly from the Credential Provider to the PSP, removing the agent from the liability chain entirely. Both live user sessions and fully autonomous flows (where the user pre-signs an intent and the agent acts later without interruption) are supported natively.
+For users: Every purchase is backed by a hardware-signed, non-repudiable mandate. The exact items and price the user approved are locked into a cryptographic document before any payment is triggered. An agent cannot charge more, buy different items, or redirect payment — the mandate prevents it at the protocol level.
+
+Where FCP Sits in the Agentic Commerce Stack
+Agentic commerce requires three layers to function: an intelligence layer (the LLM reasoning about what to buy), a discovery layer (finding what merchants offer and at what price), and a transaction layer (executing the purchase securely). FCP owns the transaction layer entirely, and interfaces cleanly with existing standards at both edges.
+At the top, FCP is compatible with MCP (Model Context Protocol) and A2A (Agent-to-Agent) — the protocols through which LLMs invoke tools and coordinate with other agents. At the bottom, FCP is payment-agnostic: it supports delegated tokens, direct card credentials, bank transfers, and stablecoins, and works with any PSP.
+This positions FCP as the agentic commerce enablement layer — the protocol that sits between AI reasoning and payment execution, handling the session management, cryptographic authorisation, fraud context, discount orchestration, and loyalty integration that neither LLM frameworks nor payment networks were designed to address.
